@@ -18,7 +18,8 @@ SCORE_TIERS = {
     "F": (0, 19),
 }
 
-CATALOG = "store_siting"
+import os
+CATALOG = os.environ.get("CATALOG", "vdm_classic_rikfy0_catalog")
 BRONZE_SCHEMA = "bronze"
 SILVER_SCHEMA = "silver"
 GOLD_SCHEMA = "gold"
