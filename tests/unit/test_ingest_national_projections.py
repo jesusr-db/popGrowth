@@ -1,32 +1,54 @@
-import os
-from src.ingestion.national_projections import parse_national_projections_csv, build_download_url
+import pytest
+from unittest.mock import patch, MagicMock
+
+import requests
+
+from src.ingestion.national_projections import _fetch_projections
 
 
-def test_build_download_url():
-    url = build_download_url(2023)
-    assert "census.gov" in url
-    assert "2023" in url
+SAMPLE_RESPONSE = [
+    ["POP", "YEAR", "SEX", "state"],
+    ["22000000", "2030", "0", "12"],
+    ["11000000", "2030", "1", "12"],  # male only — should be filtered
+    ["30000000", "2040", "0", "48"],
+]
 
 
-def test_parse_national_projections_csv():
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "..", "fixtures", "national_projections_sample.csv"
-    )
-    rows = parse_national_projections_csv(fixture_path)
-    assert len(rows) == 3
+@patch("src.ingestion.national_projections.requests.get")
+def test_fetch_projections_parses_rows(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = SAMPLE_RESPONSE
+    mock_resp.raise_for_status = MagicMock()
+    mock_get.return_value = mock_resp
 
-    row = rows[0]
-    assert row["state_fips"] == "12"
-    assert row["state_name"] == "Florida"
-    assert row["projection_year"] == 2030
-    assert row["projected_population"] == 24500000
+    rows = _fetch_projections(2017)
+    # Only SEX=0 rows kept, so 2 out of 3
+    assert len(rows) == 2
+    assert rows[0]["state_fips"] == "12"
+    assert rows[0]["projection_year"] == 2030
+    assert rows[0]["projected_population"] == 22000000
+    assert rows[0]["data_source"] == "census_popproj"
 
 
-def test_parse_national_projections_csv_state_fips_format():
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "..", "fixtures", "national_projections_sample.csv"
-    )
-    rows = parse_national_projections_csv(fixture_path)
-    for row in rows:
-        assert len(row["state_fips"]) == 2
-        assert row["state_fips"].isdigit()
+@patch("src.ingestion.national_projections.requests.get")
+def test_fetch_projections_url_construction(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = [["POP", "YEAR", "SEX", "state"]]
+    mock_resp.raise_for_status = MagicMock()
+    mock_get.return_value = mock_resp
+
+    _fetch_projections(2017)
+    url = mock_get.call_args[0][0]
+    assert "2017" in url
+    assert "popproj" in url
+    assert "api.census.gov" in url
+
+
+@patch("src.ingestion.national_projections.requests.get")
+def test_fetch_projections_raises_not_implemented_on_http_error(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.side_effect = requests.RequestException("404")
+    mock_get.return_value = mock_resp
+
+    with pytest.raises(NotImplementedError, match="not available for vintage"):
+        _fetch_projections(2099)

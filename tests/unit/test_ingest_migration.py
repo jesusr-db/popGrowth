@@ -1,29 +1,41 @@
-import os
-from src.ingestion.migration import parse_migration_csv
+from unittest.mock import patch, MagicMock
+
+from src.ingestion.migration import (
+    _parse_migration_csv,
+    _aggregate_flows,
+    _build_migration_rows,
+)
 
 
 def test_parse_migration_csv():
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "..", "fixtures", "migration_sample.csv"
-    )
-    rows = parse_migration_csv(fixture_path)
-    assert len(rows) == 3
-
-    miami = rows[0]
-    assert miami["fips"] == "12086"
-    assert miami["inflow"] == 8500
-    assert miami["outflow"] == 6200
-    assert miami["net_migration"] == 2300
-
-    ny = rows[1]
-    assert ny["net_migration"] == -3600
+    csv_text = "y1_statefips,y1_countyfips,y2_statefips,y2_countyfips,n1,n2\n12,086,48,453,100,250\n48,453,12,086,80,200\n"
+    rows = _parse_migration_csv(csv_text)
+    assert len(rows) == 2
+    assert rows[0]["y1_statefips"] == "12"
+    assert rows[0]["n2"] == "250"
 
 
-def test_parse_migration_csv_all_have_fips():
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "..", "fixtures", "migration_sample.csv"
-    )
-    rows = parse_migration_csv(fixture_path)
-    for row in rows:
-        assert len(row["fips"]) == 5
-        assert row["fips"].isdigit()
+def test_aggregate_flows_skips_summary_rows():
+    rows = [
+        {"y2_statefips": "12", "y2_countyfips": "086", "n2": "100"},
+        {"y2_statefips": "96", "y2_countyfips": "000", "n2": "999"},  # summary row
+        {"y2_statefips": "12", "y2_countyfips": "086", "n2": "50"},
+        {"y2_statefips": "12", "y2_countyfips": "000", "n2": "300"},  # county 000 = state total
+    ]
+    totals = _aggregate_flows(rows, "y2_statefips", "y2_countyfips")
+    assert totals["12086"] == 150
+    assert "96000" not in totals
+    assert "12000" not in totals
+
+
+def test_build_migration_rows():
+    inflow = {"12086": 500, "48453": 300}
+    outflow = {"12086": 200, "48453": 400}
+    rows = _build_migration_rows(inflow, outflow, 2023, 1)
+    assert len(rows) == 2
+
+    by_fips = {r["fips"]: r for r in rows}
+    assert by_fips["12086"]["net_migration"] == 300
+    assert by_fips["48453"]["net_migration"] == -100
+    assert by_fips["12086"]["data_source"] == "irs_soi"
+    assert by_fips["12086"]["report_year"] == 2023

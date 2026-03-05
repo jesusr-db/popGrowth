@@ -1,31 +1,57 @@
-import os
-from src.ingestion.school_enrollment import parse_school_enrollment_csv, build_download_url
+from unittest.mock import patch, MagicMock
+
+from src.ingestion.school_enrollment import _fetch_enrollment
 
 
-def test_build_download_url():
-    url = build_download_url(2025)
-    assert "nces.ed.gov" in url
-    assert "2025" in url
+SAMPLE_RESPONSE = [
+    ["B14001_002E", "NAME", "state", "county"],
+    ["345000", "Miami-Dade County, Florida", "12", "086"],
+    ["120000", "Travis County, Texas", "48", "453"],
+]
 
 
-def test_parse_school_enrollment_csv():
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "..", "fixtures", "school_enrollment_sample.csv"
-    )
-    rows = parse_school_enrollment_csv(fixture_path)
-    assert len(rows) == 3
+@patch("src.ingestion.school_enrollment.requests.get")
+def test_fetch_enrollment_parses_rows(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = SAMPLE_RESPONSE
+    mock_resp.raise_for_status = MagicMock()
+    mock_get.return_value = mock_resp
 
-    row = rows[0]
-    assert row["fips"] == "12086"
-    assert row["total_enrollment"] == 345000
-    assert row["district_name"] == "Miami-Dade County Public Schools"
+    rows = _fetch_enrollment(2022)
+    assert len(rows) == 2
+
+    assert rows[0]["fips"] == "12086"
+    assert rows[0]["total_enrollment"] == 345000
+    assert rows[0]["data_source"] == "census_acs"
+    assert rows[0]["report_year"] == 2022
 
 
-def test_parse_school_enrollment_csv_fips_format():
-    fixture_path = os.path.join(
-        os.path.dirname(__file__), "..", "fixtures", "school_enrollment_sample.csv"
-    )
-    rows = parse_school_enrollment_csv(fixture_path)
-    for row in rows:
-        assert len(row["fips"]) == 5
-        assert row["fips"].isdigit()
+@patch("src.ingestion.school_enrollment.requests.get")
+def test_fetch_enrollment_url_construction(mock_get):
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = [["B14001_002E", "NAME", "state", "county"]]
+    mock_resp.raise_for_status = MagicMock()
+    mock_get.return_value = mock_resp
+
+    _fetch_enrollment(2021)
+    url = mock_get.call_args[0][0]
+    assert "2021" in url
+    assert "api.census.gov" in url
+    assert "B14001_002E" in url
+
+
+@patch("src.ingestion.school_enrollment.requests.get")
+def test_fetch_enrollment_skips_missing_values(mock_get):
+    data = [
+        ["B14001_002E", "NAME", "state", "county"],
+        ["-", "Empty County, State", "01", "001"],
+        ["50000", "Real County, State", "01", "003"],
+    ]
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = data
+    mock_resp.raise_for_status = MagicMock()
+    mock_get.return_value = mock_resp
+
+    rows = _fetch_enrollment(2022)
+    assert len(rows) == 1
+    assert rows[0]["fips"] == "01003"
