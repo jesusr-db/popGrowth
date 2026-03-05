@@ -47,9 +47,19 @@ def run_all_silver_transforms(spark: SparkSession, catalog: str = CATALOG):
             spark.table(f"{bronze}.national_projections"))),
     ]
 
+    import logging
+    logger = logging.getLogger(__name__)
+
     for name, transform_fn in transforms:
-        df = transform_fn()
-        df.write.mode("overwrite").saveAsTable(f"{silver}.silver_{name}")
+        try:
+            df = transform_fn()
+            df.write.mode("overwrite").saveAsTable(f"{silver}.silver_{name}")
+            logger.info(f"Silver transform {name} completed successfully")
+        except Exception as e:
+            if "TABLE_OR_VIEW_NOT_FOUND" in str(e) or "does not exist" in str(e):
+                logger.warning(f"Skipping {name}: bronze table not found ({e})")
+            else:
+                raise
 
 
 if __name__ == "__main__":
