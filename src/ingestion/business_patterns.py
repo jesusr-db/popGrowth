@@ -1,54 +1,64 @@
-"""Ingest Census County Business Patterns data into Bronze."""
+"""Ingest Census County Business Patterns data from Census CBP API into Bronze.
 
-import csv
-import os
-import requests
-import tempfile
+Uses the Census CBP API to retrieve county-level business pattern data:
+  ESTAB = number of establishments
+  EMP = number of employees
+  NAICS2017 = NAICS industry code
+
+URL pattern:
+  https://api.census.gov/data/{year}/cbp?get=ESTAB,EMP,NAICS2017&for=county:*&in=state:*
+"""
+
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
+import requests
+
 from src.common.fips import normalize_fips
 
-
-def build_download_url(year: int) -> str:
-    """Build the Census CBP data download URL."""
-    return f"https://www2.census.gov/programs-surveys/cbp/datasets/{year}/cbp{str(year)[2:]}co.txt"
+logger = logging.getLogger(__name__)
 
 
-def parse_business_patterns_csv(filepath: str) -> list[dict[str, Any]]:
-    """Parse business patterns CSV into list of dicts."""
-    rows = []
-    with open(filepath, "r") as f:
-        reader = csv.DictReader(f)
-        for record in reader:
-            fips = normalize_fips(record["county_fips"].strip())
-            rows.append({
-                "fips": fips,
-                "county_name": record["county_name"].strip(),
-                "state": record["state"].strip(),
-                "naics_code": record["naics_code"].strip(),
-                "establishments": int(record["establishments"].strip()),
-                "employees": int(record["employees"].strip()),
-            })
+def _fetch_business_patterns(year: int) -> list[dict[str, Any]]:
+    """Fetch county-level business patterns from Census CBP API."""
+    url = (
+        f"https://api.census.gov/data/{year}/cbp"
+        f"?get=ESTAB,EMP,NAICS2017&for=county:*&in=state:*"
+    )
+    response = requests.get(url, timeout=120)
+    response.raise_for_status()
+    data = response.json()
+
+    header = data[0]
+    rows: list[dict[str, Any]] = []
+    for record in data[1:]:
+        row = dict(zip(header, record))
+        state_fips = row["state"]
+        county_fips = row["county"]
+        fips = normalize_fips(state_fips + county_fips)
+
+        naics_code = row.get("NAICS2017", "")
+
+        try:
+            establishments = int(row["ESTAB"]) if row["ESTAB"] not in (None, "", "-") else 0
+            employees = int(row["EMP"]) if row["EMP"] not in (None, "", "-") else 0
+        except (ValueError, TypeError):
+            continue
+
+        rows.append({
+            "fips": fips,
+            "report_year": year,
+            "naics_code": naics_code,
+            "establishments": establishments,
+            "employees": employees,
+            "data_source": "census_cbp",
+        })
     return rows
 
 
-def download_and_parse(year: int) -> list[dict[str, Any]]:
-    url = build_download_url(year)
-    response = requests.get(url, timeout=60)
-    response.raise_for_status()
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-        f.write(response.text)
-        tmp_path = f.name
-
-    try:
-        return parse_business_patterns_csv(tmp_path)
-    finally:
-        os.unlink(tmp_path)
-
-
 def ingest(spark, year: int, catalog: str | None = None):
+    """Ingest County Business Patterns data into Bronze."""
     from pyspark.sql.functions import lit, current_timestamp
     if catalog is None:
         from src.common.config import CATALOG
@@ -57,7 +67,7 @@ def ingest(spark, year: int, catalog: str | None = None):
 
     started_at = datetime.now(timezone.utc)
     try:
-        rows = download_and_parse(year)
+        rows = _fetch_business_patterns(year)
         if not rows:
             log_ingestion(spark, "business_patterns", "success", 0,
                          started_at=started_at, catalog=catalog)

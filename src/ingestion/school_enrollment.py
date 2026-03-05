@@ -1,54 +1,58 @@
-"""Ingest NCES school enrollment data into Bronze."""
+"""Ingest school enrollment data from Census ACS into Bronze.
 
-import csv
-import os
-import requests
-import tempfile
+Uses the Census ACS 5-Year API to retrieve county-level school enrollment
+(variable B14001_002E = total enrolled in school, ages 3+).
+
+URL pattern:
+  https://api.census.gov/data/{year}/acs/acs5?get=B14001_002E,NAME&for=county:*&in=state:*
+"""
+
+import logging
 from datetime import datetime, timezone, date
 from typing import Any
 
+import requests
+
 from src.common.fips import normalize_fips
 
-
-def build_download_url(year: int) -> str:
-    """Build the NCES school enrollment data download URL."""
-    return f"https://nces.ed.gov/ccd/data/csv/ccd_sch_enrollment_{year}.csv"
+logger = logging.getLogger(__name__)
 
 
-def parse_school_enrollment_csv(filepath: str) -> list[dict[str, Any]]:
-    """Parse school enrollment CSV into list of dicts."""
-    rows = []
-    with open(filepath, "r") as f:
-        reader = csv.DictReader(f)
-        for record in reader:
-            fips = normalize_fips(record["county_fips"].strip())
-            rows.append({
-                "fips": fips,
-                "district_id": record["district_id"].strip(),
-                "district_name": record["district_name"].strip(),
-                "state": record["state"].strip(),
-                "report_year": int(record["year"].strip()),
-                "total_enrollment": int(record["total_enrollment"].strip()),
-            })
+def _fetch_enrollment(year: int) -> list[dict[str, Any]]:
+    """Fetch county-level school enrollment from Census ACS API."""
+    url = (
+        f"https://api.census.gov/data/{year}/acs/acs5"
+        f"?get=B14001_002E,NAME&for=county:*&in=state:*"
+    )
+    response = requests.get(url, timeout=120)
+    response.raise_for_status()
+    data = response.json()
+
+    # First row is the header
+    header = data[0]
+    rows: list[dict[str, Any]] = []
+    for record in data[1:]:
+        row = dict(zip(header, record))
+        state_fips = row["state"]
+        county_fips = row["county"]
+        fips = normalize_fips(state_fips + county_fips)
+
+        enrollment_raw = row.get("B14001_002E")
+        if enrollment_raw is None or enrollment_raw in ("", "-"):
+            continue
+        total_enrollment = int(enrollment_raw)
+
+        rows.append({
+            "fips": fips,
+            "report_year": year,
+            "total_enrollment": total_enrollment,
+            "data_source": "census_acs",
+        })
     return rows
 
 
-def download_and_parse(year: int) -> list[dict[str, Any]]:
-    url = build_download_url(year)
-    response = requests.get(url, timeout=60)
-    response.raise_for_status()
-
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-        f.write(response.text)
-        tmp_path = f.name
-
-    try:
-        return parse_school_enrollment_csv(tmp_path)
-    finally:
-        os.unlink(tmp_path)
-
-
 def ingest(spark, year: int, catalog: str | None = None):
+    """Ingest school enrollment data into Bronze."""
     from pyspark.sql.functions import lit, current_timestamp
     if catalog is None:
         from src.common.config import CATALOG
@@ -57,7 +61,7 @@ def ingest(spark, year: int, catalog: str | None = None):
 
     started_at = datetime.now(timezone.utc)
     try:
-        rows = download_and_parse(year)
+        rows = _fetch_enrollment(year)
         if not rows:
             log_ingestion(spark, "school_enrollment", "success", 0,
                          started_at=started_at, catalog=catalog)
