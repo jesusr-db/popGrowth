@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
-import DeckGL from "@deck.gl/react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { MapboxOverlay } from "@deck.gl/mapbox";
 import { GeoJsonLayer } from "@deck.gl/layers";
-import { Map } from "react-map-gl/maplibre";
+import MapGL, { useControl, NavigationControl } from "react-map-gl/maplibre";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { api } from "../api/client";
 
 const INITIAL_VIEW = {
@@ -34,6 +35,12 @@ const STATE_FIPS: Record<string, string> = {
   "56": "WY",
 };
 
+function DeckGLOverlay(props: { layers: any[] }) {
+  const overlay = useControl(() => new MapboxOverlay({ interleaved: false }));
+  overlay.setProps({ layers: props.layers });
+  return null;
+}
+
 interface Props {
   onSelectCounty: (fips: string) => void;
   refreshKey: number;
@@ -58,41 +65,42 @@ export function NationalMap({ onSelectCounty, refreshKey }: Props) {
       if (st && STATE_FIPS[st]) seen.add(st);
     }
     return Array.from(seen)
-      .sort((a, b) => (STATE_FIPS[a] || "").localeCompare(STATE_FIPS[b] || ""))
+      .sort((a, b) => (STATE_FIPS[a] || "").localeCompare(STATE_FIPS[b] || ""));
   }, [geojson]);
 
-  const layers = geojson
-    ? [
-        new GeoJsonLayer({
-          id: "counties",
-          data: geojson,
-          filled: true,
-          stroked: true,
-          getLineColor: [100, 100, 100, 80],
-          lineWidthMinPixels: 0.5,
-          getFillColor: (f: any) => {
-            const props = f.properties || {};
-            const tier = props.score_tier || "F";
-            const score = props.composite_score || 0;
+  const layers = useMemo(() => {
+    if (!geojson) return [];
+    return [
+      new GeoJsonLayer({
+        id: "counties",
+        data: geojson,
+        filled: true,
+        stroked: true,
+        getLineColor: [100, 100, 100, 80],
+        lineWidthMinPixels: 0.5,
+        getFillColor: (f: any) => {
+          const props = f.properties || {};
+          const tier = props.score_tier || "F";
+          const score = props.composite_score || 0;
 
-            if (stateFilter && props.STATE !== stateFilter) return [200, 200, 200, 50] as [number, number, number, number];
-            if (tierFilter && tier !== tierFilter) return [200, 200, 200, 50] as [number, number, number, number];
-            if (score < minScore) return [200, 200, 200, 50] as [number, number, number, number];
+          if (stateFilter && props.STATE !== stateFilter) return [200, 200, 200, 50];
+          if (tierFilter && tier !== tierFilter) return [200, 200, 200, 50];
+          if (score < minScore) return [200, 200, 200, 50];
 
-            return TIER_COLORS[tier] || TIER_COLORS.F;
-          },
-          pickable: true,
-          onHover: (info: any) => setHovered(info.object ? info : null),
-          onClick: (info: any) => {
-            const fips = info.object?.properties?.GEOID;
-            if (fips) onSelectCounty(fips);
-          },
-          updateTriggers: {
-            getFillColor: [stateFilter, tierFilter, minScore],
-          },
-        }),
-      ]
-    : [];
+          return TIER_COLORS[tier] || TIER_COLORS.F;
+        },
+        pickable: true,
+        onHover: (info: any) => setHovered(info.object ? info : null),
+        onClick: (info: any) => {
+          const fips = info.object?.properties?.GEOID;
+          if (fips) onSelectCounty(fips);
+        },
+        updateTriggers: {
+          getFillColor: [stateFilter, tierFilter, minScore],
+        },
+      }),
+    ];
+  }, [geojson, stateFilter, tierFilter, minScore, onSelectCounty]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -118,9 +126,14 @@ export function NationalMap({ onSelectCounty, refreshKey }: Props) {
         </label>
       </div>
 
-      <DeckGL initialViewState={INITIAL_VIEW} controller layers={layers}>
-        <Map mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json" />
-      </DeckGL>
+      <MapGL
+        initialViewState={INITIAL_VIEW}
+        style={{ width: "100%", height: "100%" }}
+        mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+      >
+        <DeckGLOverlay layers={layers} />
+        <NavigationControl position="bottom-right" />
+      </MapGL>
 
       {hovered && hovered.object && (
         <div
