@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    ingest_hud_construction:
+      name: "store-siting-ingest-hud-construction"
+      schedule:
+        quartz_cron_expression: "0 0 6 1 1,4,7,10 ?"
+        timezone_id: "America/New_York"
+      tasks:
+        - task_key: ingest
+          python_wheel_task:
+            package_name: store_siting
+            entry_point: ingest_hud_construction
+          libraries:
+            - whl: ../dist/*.whl
+          existing_cluster_id: ${var.cluster_id}

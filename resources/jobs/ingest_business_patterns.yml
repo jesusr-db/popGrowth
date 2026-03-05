@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    ingest_business_patterns:
+      name: "store-siting-ingest-business-patterns"
+      schedule:
+        quartz_cron_expression: "0 0 6 15 6 ?"
+        timezone_id: "America/New_York"
+      tasks:
+        - task_key: ingest
+          python_wheel_task:
+            package_name: store_siting
+            entry_point: ingest_business_patterns
+          libraries:
+            - whl: ../dist/*.whl
+          existing_cluster_id: ${var.cluster_id}

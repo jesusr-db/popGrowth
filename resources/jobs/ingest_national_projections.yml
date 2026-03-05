@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    ingest_national_projections:
+      name: "store-siting-ingest-national-projections"
+      schedule:
+        quartz_cron_expression: "0 0 6 1 1 ?"
+        timezone_id: "America/New_York"
+      tasks:
+        - task_key: ingest
+          python_wheel_task:
+            package_name: store_siting
+            entry_point: ingest_national_projections
+          libraries:
+            - whl: ../dist/*.whl
+          existing_cluster_id: ${var.cluster_id}
