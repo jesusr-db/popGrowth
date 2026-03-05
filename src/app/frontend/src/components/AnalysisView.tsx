@@ -40,6 +40,8 @@ export function AnalysisView({ geojson, onSelectCounty, selectedFips, onCloseDet
 
   const bounds = useMemo<DataBounds>(() => computeBounds(features), [features]);
   const [filters, setFilters] = useState<Filters>(() => defaultFilters(bounds));
+  const [showFilters, setShowFilters] = useState(true);
+  const [showResults, setShowResults] = useState(true);
 
   const states = useMemo(() => {
     const seen = new Set<string>();
@@ -87,14 +89,25 @@ export function AnalysisView({ geojson, onSelectCounty, selectedFips, onCloseDet
 
   return (
     <div className="analysis-view">
-      <FilterPanel
-        filters={filters}
-        bounds={bounds}
-        matchCount={matchingFips.size}
-        totalCount={features.length}
-        states={states}
-        onChange={setFilters}
-      />
+      <div className={`filter-panel-wrapper ${showFilters ? "" : "collapsed"}`}>
+        <div className="filter-panel-content">
+          <FilterPanel
+            filters={filters}
+            bounds={bounds}
+            matchCount={matchingFips.size}
+            totalCount={features.length}
+            states={states}
+            onChange={setFilters}
+          />
+        </div>
+        <button
+          className="panel-toggle panel-toggle-left"
+          onClick={() => setShowFilters(v => !v)}
+          title={showFilters ? "Hide filters" : "Show filters"}
+        >
+          {showFilters ? "◀" : "▶"}
+        </button>
+      </div>
 
       <div className="analysis-map">
         <MapGL
@@ -115,16 +128,25 @@ export function AnalysisView({ geojson, onSelectCounty, selectedFips, onCloseDet
         )}
       </div>
 
-      <div className="analysis-right">
-        {selectedFips ? (
-          <CountyDetail fips={selectedFips} onClose={onCloseDetail} />
-        ) : (
-          <ResultsList
-            features={features}
-            matchingFips={matchingFips}
-            onSelect={onSelectCounty}
-          />
-        )}
+      <div className={`analysis-right-wrapper ${showResults ? "" : "collapsed"}`}>
+        <button
+          className="panel-toggle panel-toggle-right"
+          onClick={() => setShowResults(v => !v)}
+          title={showResults ? "Hide results" : "Show results"}
+        >
+          {showResults ? "▶" : "◀"}
+        </button>
+        <div className="analysis-right-content">
+          {selectedFips ? (
+            <CountyDetail fips={selectedFips} onClose={onCloseDetail} />
+          ) : (
+            <ResultsList
+              features={features}
+              matchingFips={matchingFips}
+              onSelect={onSelectCounty}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
