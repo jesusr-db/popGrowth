@@ -6,8 +6,11 @@ from contextlib import contextmanager
 
 
 def get_connection_params():
+    host = os.environ["DATABRICKS_HOST"]
+    # Strip protocol prefix if present — connector expects just the hostname
+    host = host.replace("https://", "").replace("http://", "").rstrip("/")
     return {
-        "server_hostname": os.environ["DATABRICKS_HOST"],
+        "server_hostname": host,
         "http_path": os.environ["DATABRICKS_HTTP_PATH"],
         "access_token": os.environ.get("DATABRICKS_TOKEN", ""),
     }

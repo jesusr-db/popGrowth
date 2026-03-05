@@ -1,7 +1,7 @@
 import json
 import os
 from fastapi import APIRouter
-from src.app.backend.db import execute_query
+from backend.db import execute_query
 
 router = APIRouter(prefix="/api")
 

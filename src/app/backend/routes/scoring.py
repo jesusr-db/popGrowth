@@ -1,7 +1,7 @@
 import os
 from fastapi import APIRouter
-from src.app.backend.db import execute_query
-from src.app.backend.models.county import ScoringWeight, ScoringWeightsUpdate
+from backend.db import execute_query
+from backend.models.county import ScoringWeight, ScoringWeightsUpdate
 
 router = APIRouter(prefix="/api")
 

@@ -1,8 +1,8 @@
 import os
 import re
 from fastapi import APIRouter, Query, HTTPException
-from src.app.backend.db import execute_query
-from src.app.backend.models.county import CountySummary, CountyDetail
+from backend.db import execute_query
+from backend.models.county import CountySummary, CountyDetail
 
 router = APIRouter(prefix="/api")
 
