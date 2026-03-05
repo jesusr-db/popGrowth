@@ -1,0 +1,4 @@
+county_fips,county_name,state,projection_year,scenario,projected_population
+12086,Miami-Dade,FL,2030,SSP2,2950000
+36061,New York,NY,2030,SSP2,1710000
+06037,Los Angeles,CA,2030,SSP2,10200000

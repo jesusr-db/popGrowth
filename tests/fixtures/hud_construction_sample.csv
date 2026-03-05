@@ -1,0 +1,4 @@
+year,quarter,county_fips,county_name,state,permitted_units,structure_type
+2025,1,12086,Miami-Dade,FL,580,single-family
+2025,1,36061,New York,NY,120,multi-family
+2025,1,06037,Los Angeles,CA,445,single-family
