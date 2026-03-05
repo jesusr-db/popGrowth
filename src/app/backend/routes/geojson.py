@@ -14,8 +14,12 @@ def get_geojson():
 
     catalog = os.environ.get("CATALOG", "store_siting")
     scores = execute_query(
-        f"SELECT fips, composite_score, score_tier, rank_national, population "
-        f"FROM {catalog}.gold.gold_county_growth_score"
+        f"""SELECT s.fips, s.composite_score, s.score_tier, s.rank_national,
+                   s.population, s.median_income, s.ssp_growth_rate,
+                   d.permits_per_1k_pop, d.net_migration_rate,
+                   d.occupancy_rate, d.employment_per_capita
+            FROM {catalog}.gold.gold_county_growth_score s
+            LEFT JOIN {catalog}.gold.gold_county_details d ON s.fips = d.fips"""
     )
     score_lookup = {r["fips"]: r for r in scores}
 
