@@ -26,14 +26,18 @@ def get_connection_params():
     if token:
         params["access_token"] = token
     else:
-        # Use Databricks SDK credentials provider (works in Databricks Apps)
+        # Use Databricks SDK to get an OAuth token for the service principal
         try:
             from databricks.sdk import WorkspaceClient
             w = WorkspaceClient()
-            params["credentials_provider"] = w.config.authenticate
-            logger.debug("Using SDK credentials provider")
+            token = w.config.authenticate()
+            if isinstance(token, dict):
+                params["access_token"] = token.get("Authorization", "").replace("Bearer ", "")
+            else:
+                params["access_token"] = str(token).replace("Bearer ", "")
+            logger.debug("Got OAuth token via SDK")
         except Exception as e:
-            logger.warning("Could not initialize SDK credentials: %s", e)
+            logger.warning("Could not get SDK token: %s", e)
 
     return params
 
