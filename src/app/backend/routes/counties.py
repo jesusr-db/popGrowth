@@ -1,9 +1,14 @@
 import os
+import re
 from fastapi import APIRouter, Query, HTTPException
 from src.app.backend.db import execute_query
 from src.app.backend.models.county import CountySummary, CountyDetail
 
 router = APIRouter(prefix="/api")
+
+# Simple validators to prevent SQL injection (catalog is from env, not user input)
+_FIPS_RE = re.compile(r"^\d{5}$")
+_STATE_RE = re.compile(r"^[A-Za-z]{2}$")
 
 
 @router.get("/counties", response_model=list[CountySummary])
@@ -11,25 +16,29 @@ def list_counties(state: str | None = Query(None)):
     catalog = os.environ.get("CATALOG", "store_siting")
     query = f"SELECT * FROM {catalog}.gold.gold_county_growth_score"
     if state:
+        if not _STATE_RE.match(state):
+            raise HTTPException(400, "Invalid state code")
         query += f" WHERE state = '{state}'"
     query += " ORDER BY composite_score DESC"
-    rows = execute_query(query)
-    return rows
+    return execute_query(query)
 
 
 @router.get("/counties/top", response_model=list[CountySummary])
-def top_counties(n: int = Query(25), state: str | None = Query(None)):
+def top_counties(n: int = Query(25, ge=1, le=500), state: str | None = Query(None)):
     catalog = os.environ.get("CATALOG", "store_siting")
     query = f"SELECT * FROM {catalog}.gold.gold_county_growth_score"
     if state:
+        if not _STATE_RE.match(state):
+            raise HTTPException(400, "Invalid state code")
         query += f" WHERE state = '{state}'"
     query += f" ORDER BY composite_score DESC LIMIT {n}"
-    rows = execute_query(query)
-    return rows
+    return execute_query(query)
 
 
 @router.get("/counties/{fips}", response_model=CountyDetail)
 def get_county(fips: str):
+    if not _FIPS_RE.match(fips):
+        raise HTTPException(400, "FIPS must be a 5-digit code")
     catalog = os.environ.get("CATALOG", "store_siting")
     query = f"""
         SELECT s.*, d.*
@@ -45,6 +54,8 @@ def get_county(fips: str):
 
 @router.get("/trends/{fips}")
 def get_trends(fips: str):
+    if not _FIPS_RE.match(fips):
+        raise HTTPException(400, "FIPS must be a 5-digit code")
     catalog = os.environ.get("CATALOG", "store_siting")
     query = f"""
         SELECT report_year, report_quarter,

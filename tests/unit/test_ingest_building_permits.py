@@ -1,13 +1,11 @@
-import pytest
 import os
-from unittest.mock import patch, MagicMock
 from src.ingestion.building_permits import parse_building_permits_csv, build_download_url
 
 
 def test_build_download_url():
     url = build_download_url(2025, 1)
     assert "census.gov" in url
-    assert "2025" in url
+    assert "co2501c.txt" in url
 
 
 def test_parse_building_permits_csv():
@@ -20,8 +18,8 @@ def test_parse_building_permits_csv():
     assert row["fips"] == "12086"
     assert row["county_name"] == "Miami-Dade County"
     assert row["single_family_units"] == 450
-    assert row["multi_family_units"] == 330
-    assert row["total_units"] == 780
+    assert row["multi_family_units"] == 50 + 50 + 230  # 2-unit + 3-4 unit + 5+ unit
+    assert row["total_units"] == 450 + 330
 
 
 def test_parse_building_permits_csv_computes_total():

@@ -1,4 +1,4 @@
-from src.common.config import DEFAULT_WEIGHTS, SCORE_TIERS, get_table_name
+from src.common.config import DEFAULT_WEIGHTS, SCORE_TIERS, CATALOG, get_table_name
 
 
 def test_weights_sum_to_one():
@@ -13,4 +13,4 @@ def test_tiers_cover_full_range():
 
 
 def test_get_table_name():
-    assert get_table_name("bronze", "permits") == "store_siting.bronze.permits"
+    assert get_table_name("bronze", "permits") == f"{CATALOG}.bronze.permits"

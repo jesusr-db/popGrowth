@@ -19,8 +19,13 @@ def run_all_silver_transforms(spark: SparkSession, catalog: str = CATALOG):
     bronze = f"{catalog}.{BRONZE_SCHEMA}"
     silver = f"{catalog}.{SILVER_SCHEMA}"
 
-    pop_df = spark.table(f"{silver}.silver_acs_demographics").select("fips", "population")
+    # Phase 1: ACS demographics must run first (provides pop_df for others)
+    acs_df = transform_acs_demographics(spark.table(f"{bronze}.acs_demographics"))
+    acs_df.write.mode("overwrite").saveAsTable(f"{silver}.silver_acs_demographics")
 
+    pop_df = acs_df.select("fips", "population")
+
+    # Phase 2: All other transforms (no interdependencies)
     transforms = [
         ("building_permits", lambda: transform_building_permits(
             spark.table(f"{bronze}.building_permits"))),
@@ -34,8 +39,6 @@ def run_all_silver_transforms(spark: SparkSession, catalog: str = CATALOG):
             spark.table(f"{bronze}.employment"))),
         ("school_enrollment", lambda: transform_school_enrollment(
             spark.table(f"{bronze}.school_enrollment"))),
-        ("acs_demographics", lambda: transform_acs_demographics(
-            spark.table(f"{bronze}.acs_demographics"))),
         ("business_patterns", lambda: transform_business_patterns(
             spark.table(f"{bronze}.business_patterns"), pop_df)),
         ("ssp_projections", lambda: transform_ssp_projections(

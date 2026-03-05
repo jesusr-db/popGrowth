@@ -9,8 +9,9 @@ from pyspark.sql.functions import (
 
 def transform_building_permits(bronze_df: DataFrame) -> DataFrame:
     """Aggregate monthly building permits to quarterly at county FIPS level."""
+    # Census survey_date format is "YYYYMM" (e.g., "202401")
     parsed = bronze_df.withColumn(
-        "parsed_date", to_date(col("survey_date"), "MM/yyyy")
+        "parsed_date", to_date(col("survey_date"), "yyyyMM")
     ).withColumn(
         "report_year", spark_year("parsed_date")
     ).withColumn(

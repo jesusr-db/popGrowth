@@ -9,6 +9,7 @@ from pyspark.sql.window import Window
 from pyspark.sql.types import DoubleType, StringType
 
 from src.common.config import CATALOG, SILVER_SCHEMA, GOLD_SCHEMA, DEFAULT_WEIGHTS, MIN_SOURCES_FOR_SCORE
+from src.common.fips import fips_to_state_abbr
 from src.gold.scoring import compute_composite_score, assign_tier
 
 
@@ -23,7 +24,7 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
 
     permits = (
         spark.table(f"{silver}.silver_building_permits")
-        .select("fips", "report_year", "report_quarter",
+        .select("fips", "county_name", "report_year", "report_quarter",
                 col("total_units_permitted"),
                 col("single_family_units").alias("bp_single"),
                 col("multi_family_units").alias("bp_multi"))
@@ -80,6 +81,9 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
         .join(business, on=join_keys_yr[:2], how="left")
         .join(ssp, on=join_keys_yr[:2], how="left")
     )
+
+    state_udf = udf(fips_to_state_abbr, StringType())
+    combined = combined.withColumn("state", state_udf(col("fips")))
 
     combined = combined.withColumn(
         "permits_per_1k_pop",
@@ -154,7 +158,7 @@ def run_gold_scoring(spark: SparkSession, catalog: str = CATALOG):
     scored_df = score_counties(indicator_df)
 
     scored_df.select(
-        "fips", "report_year", "report_quarter",
+        "fips", "county_name", "state", "report_year", "report_quarter",
         "population", "median_income",
         "composite_score", "score_tier", "rank_national",
         "component_scores",
