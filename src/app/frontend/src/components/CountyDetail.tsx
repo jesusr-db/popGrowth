@@ -51,10 +51,15 @@ export function CountyDetail({ fips, onClose }: Props) {
   if (!detail) return null;
 
   const componentScores = detail.component_scores || {};
-  const radarData = Object.entries(INDICATOR_LABELS).map(([key, label]) => ({
-    indicator: label,
-    value: Math.round(((componentScores[key] as number) || 0) * 100),
-  }));
+  const radarData = Object.entries(INDICATOR_LABELS).map(([key, label]) => {
+    const raw = componentScores[key];
+    const hasData = raw != null && raw !== undefined;
+    return {
+      indicator: label,
+      value: hasData ? Math.round(raw * 100) : 0,
+      hasData,
+    };
+  });
 
   const fmt = (v: any, decimals = 1) =>
     v != null && v !== undefined ? Number(v).toFixed(decimals) : "N/A";
@@ -167,12 +172,16 @@ export function CountyDetail({ fips, onClose }: Props) {
           <div key={d.indicator} className="bar-row">
             <span className="bar-label">{d.indicator}</span>
             <div className="bar-track">
-              <div
-                className="bar-fill"
-                style={{ width: `${d.value}%`, backgroundColor: tierColor }}
-              />
+              {d.hasData ? (
+                <div
+                  className="bar-fill"
+                  style={{ width: `${d.value}%`, backgroundColor: tierColor }}
+                />
+              ) : (
+                <div className="bar-fill bar-fill-na" style={{ width: "100%" }} />
+              )}
             </div>
-            <span className="bar-value">{d.value}</span>
+            <span className="bar-value">{d.hasData ? d.value : "N/A"}</span>
           </div>
         ))}
       </div>

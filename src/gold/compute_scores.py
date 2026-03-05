@@ -254,7 +254,7 @@ def score_counties(indicator_df: DataFrame, weights: dict | None = None) -> Data
     df = df.withColumn("rank_national", row_number().over(rank_window))
 
     df = df.withColumn("component_scores", struct(
-        *[coalesce(col(f"_norm_{name}"), lit(0.0)).alias(name) for name in w]
+        *[col(f"_norm_{name}").alias(name) for name in w]
     ))
 
     for name in w:
