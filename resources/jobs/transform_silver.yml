@@ -1,0 +1,12 @@
+resources:
+  jobs:
+    transform_silver:
+      name: "store-siting-transform-silver"
+      tasks:
+        - task_key: run_silver_transforms
+          python_wheel_task:
+            package_name: store_siting
+            entry_point: silver_transforms
+          libraries:
+            - whl: ../dist/*.whl
+          existing_cluster_id: ${var.cluster_id}
