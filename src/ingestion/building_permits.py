@@ -12,35 +12,43 @@ from src.common.fips import normalize_fips
 
 def build_download_url(year: int, month: int) -> str:
     """Build the Census Building Permits CSV download URL."""
+    yy = str(year % 100).zfill(2)
     mm = str(month).zfill(2)
-    return f"https://www2.census.gov/econ/bps/County/co{year}{mm}a.txt"
+    return f"https://www2.census.gov/econ/bps/County/co{yy}{mm}c.txt"
 
 
 def parse_building_permits_csv(filepath: str) -> list[dict[str, Any]]:
-    """Parse a building permits CSV file into a list of row dicts."""
+    """Parse a Census building permits CSV (two-header-row format)."""
     rows = []
     with open(filepath, "r") as f:
-        reader = csv.DictReader(f)
-        for record in reader:
-            state_fips = record["FIPS State Code"].strip()
-            county_fips = record["FIPS County Code"].strip()
+        reader = csv.reader(f)
+        next(reader)  # skip category header row
+        next(reader)  # skip sub-header row
+        for fields in reader:
+            if len(fields) < 17 or not fields[0].strip():
+                continue  # skip blank lines
+            survey_date = fields[0].strip()
+            state_fips = fields[1].strip()
+            county_fips = fields[2].strip().zfill(3)
             fips = normalize_fips(state_fips + county_fips)
+            county_name = fields[5].strip()
 
-            single = int(record["1-unit Units"].strip())
-            two_unit = int(record["2-unit Units"].strip())
-            three_four = int(record["3-4 unit Units"].strip())
-            five_plus = int(record["5+ unit Units"].strip())
-            multi = two_unit + three_four + five_plus
-            total = single + multi
+            single_bldgs = int(fields[6].strip() or 0)
+            single_units = int(fields[7].strip() or 0)
+            two_units = int(fields[10].strip() or 0)
+            three_four_units = int(fields[13].strip() or 0)
+            five_plus_units = int(fields[16].strip() or 0)
+            multi = two_units + three_four_units + five_plus_units
+            total = single_units + multi
 
             rows.append({
                 "fips": fips,
-                "county_name": record["County Name"].strip(),
-                "survey_date": record["Survey Date"].strip(),
-                "single_family_units": single,
+                "county_name": county_name,
+                "survey_date": survey_date,
+                "single_family_units": single_units,
                 "multi_family_units": multi,
                 "total_units": total,
-                "single_family_bldgs": int(record["1-unit Bldgs"].strip()),
+                "single_family_bldgs": single_bldgs,
             })
     return rows
 

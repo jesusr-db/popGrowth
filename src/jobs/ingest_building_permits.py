@@ -19,6 +19,5 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-building-permits").getOrCreate()
 
-# Ingest current month
-now = datetime.now()
-ingest(spark, now.year, now.month)
+# Ingest a known historical month for testing; Census data lags ~2 months
+ingest(spark, 2024, 1)
