@@ -1,0 +1,8 @@
+command:
+  - python
+  - app.py
+env:
+  - name: DATABRICKS_HTTP_PATH
+    value: /sql/1.0/warehouses/5067b513037fbf07
+  - name: CATALOG
+    value: vdm_classic_rikfy0_catalog

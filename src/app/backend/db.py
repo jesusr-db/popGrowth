@@ -1,19 +1,41 @@
 """Databricks SQL Connector for the FastAPI app."""
 
 import os
+import logging
 from databricks import sql as databricks_sql
 from contextlib import contextmanager
 
+logger = logging.getLogger(__name__)
+
 
 def get_connection_params():
-    host = os.environ["DATABRICKS_HOST"]
+    host = os.environ.get("DATABRICKS_HOST", "")
     # Strip protocol prefix if present — connector expects just the hostname
     host = host.replace("https://", "").replace("http://", "").rstrip("/")
-    return {
+    http_path = os.environ.get("DATABRICKS_HTTP_PATH", "")
+
+    logger.debug("Connecting to %s with http_path=%s", host, http_path)
+
+    params = {
         "server_hostname": host,
-        "http_path": os.environ["DATABRICKS_HTTP_PATH"],
-        "access_token": os.environ.get("DATABRICKS_TOKEN", ""),
+        "http_path": http_path,
     }
+
+    # Databricks Apps inject DATABRICKS_TOKEN or use default credentials
+    token = os.environ.get("DATABRICKS_TOKEN", "")
+    if token:
+        params["access_token"] = token
+    else:
+        # Use Databricks SDK credentials provider (works in Databricks Apps)
+        try:
+            from databricks.sdk import WorkspaceClient
+            w = WorkspaceClient()
+            params["credentials_provider"] = w.config.authenticate
+            logger.debug("Using SDK credentials provider")
+        except Exception as e:
+            logger.warning("Could not initialize SDK credentials: %s", e)
+
+    return params
 
 
 @contextmanager
