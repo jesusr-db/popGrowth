@@ -17,7 +17,10 @@ def _try_table(spark, table_name):
     """Try to read a Silver table; return None if it doesn't exist."""
     import logging
     try:
-        return spark.table(table_name)
+        df = spark.table(table_name)
+        # Force schema resolution to catch TABLE_NOT_FOUND eagerly
+        _ = df.columns
+        return df
     except Exception as e:
         if "TABLE_OR_VIEW_NOT_FOUND" in str(e) or "does not exist" in str(e):
             logging.getLogger(__name__).warning(f"Skipping missing table: {table_name}")
