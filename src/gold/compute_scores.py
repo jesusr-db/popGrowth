@@ -28,78 +28,86 @@ def _try_table(spark, table_name):
         raise
 
 
+def _latest_per_fips(df: DataFrame, cols: list[str]) -> DataFrame:
+    """Keep only the most recent row per FIPS (by report_year, report_quarter)."""
+    order_cols = []
+    if "report_year" in df.columns:
+        order_cols.append(col("report_year").desc())
+    if "report_quarter" in df.columns:
+        order_cols.append(col("report_quarter").desc())
+    if not order_cols:
+        return df.select("fips", *cols)
+
+    w = Window.partitionBy("fips").orderBy(*order_cols)
+    return (
+        df.withColumn("_rn", row_number().over(w))
+        .filter(col("_rn") == 1)
+        .drop("_rn")
+        .select("fips", *cols)
+    )
+
+
 def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFrame:
-    """Join all Silver tables into a single indicator table per county per quarter."""
+    """Join all Silver tables into one row per county using latest available data."""
     silver = f"{catalog}.{SILVER_SCHEMA}"
 
-    base = (
-        spark.table(f"{silver}.silver_acs_demographics")
-        .select("fips", "report_year", col("population"), col("median_income"))
-    )
+    # --- Load each source and keep latest row per county ---
+    base = _latest_per_fips(
+        spark.table(f"{silver}.silver_acs_demographics"),
+        ["report_year", "population", "median_income"],
+    ).withColumnRenamed("report_year", "acs_year")
 
-    permits = (
-        spark.table(f"{silver}.silver_building_permits")
-        .select("fips", "county_name", "report_year", "report_quarter",
-                col("total_units_permitted"),
-                col("single_family_units").alias("bp_single"),
-                col("multi_family_units").alias("bp_multi"))
-    )
+    permits_raw = spark.table(f"{silver}.silver_building_permits")
+    permits = _latest_per_fips(permits_raw, [
+        "county_name", "report_year", "report_quarter",
+        "total_units_permitted", "single_family_units", "multi_family_units",
+    ])
 
     migration_raw = _try_table(spark, f"{silver}.silver_migration")
     migration = (
-        migration_raw.select("fips", "report_year", "report_quarter",
-                "net_migration", "net_migration_rate")
+        _latest_per_fips(migration_raw, ["net_migration", "net_migration_rate"])
         if migration_raw else None
     )
 
     vacancy_raw = _try_table(spark, f"{silver}.silver_vacancy")
     vacancy = (
-        vacancy_raw.select("fips", "report_year", "report_quarter",
-                "vacancy_rate", "vacancy_rate_yoy_change")
+        _latest_per_fips(vacancy_raw, ["vacancy_rate", "vacancy_rate_yoy_change"])
         if vacancy_raw else None
     )
 
     employment_raw = _try_table(spark, f"{silver}.silver_employment")
     employment = (
-        employment_raw.select("fips", "report_year", "report_quarter",
-                "employment_growth_rate", "avg_weekly_wage")
+        _latest_per_fips(employment_raw, ["employment_growth_rate", "avg_weekly_wage"])
         if employment_raw else None
     )
 
     school_raw = _try_table(spark, f"{silver}.silver_school_enrollment")
     school = (
-        school_raw.select("fips", "report_year", "enrollment_growth_rate")
+        _latest_per_fips(school_raw, ["enrollment_growth_rate"])
         if school_raw else None
     )
 
     business_raw = _try_table(spark, f"{silver}.silver_business_patterns")
     business = (
-        business_raw.select("fips", "report_year", "qsr_establishments", "retail_density")
+        _latest_per_fips(business_raw, ["qsr_establishments", "retail_density"])
         if business_raw else None
     )
 
     ssp_raw = _try_table(spark, f"{silver}.silver_ssp_projections")
     ssp = (
-        ssp_raw.filter(col("scenario") == "SSP2")
-        .select("fips", col("projection_year").alias("report_year"),
-                col("projected_population"))
+        _latest_per_fips(
+            ssp_raw.filter(col("scenario") == "SSP2")
+            .withColumnRenamed("projection_year", "report_year"),
+            ["projected_population"],
+        )
         if ssp_raw else None
     )
 
-    join_keys_yr = ["fips", "report_year"]
-    join_keys_qtr = ["fips", "report_year", "report_quarter"]
-
-    # Start with permits as base quarterly table
-    combined = permits
-    for df in [migration, vacancy, employment]:
+    # --- Join everything on fips only ---
+    combined = permits.join(base, on="fips", how="outer")
+    for df in [migration, vacancy, employment, school, business, ssp]:
         if df is not None:
-            combined = combined.join(df, on=join_keys_qtr, how="outer")
-
-    # Join annual tables
-    combined = combined.join(base, on=join_keys_yr, how="outer")
-    for df in [school, business, ssp]:
-        if df is not None:
-            combined = combined.join(df, on=join_keys_yr, how="left")
+            combined = combined.join(df, on="fips", how="left")
 
     state_udf = udf(fips_to_state_abbr, StringType())
     combined = combined.withColumn("state", state_udf(col("fips")))
@@ -187,12 +195,18 @@ def run_gold_scoring(spark: SparkSession, catalog: str = CATALOG):
     indicator_df = build_indicator_table(spark, catalog)
     scored_df = score_counties(indicator_df)
 
-    scored_df.select(
+    score_cols = [
         "fips", "county_name", "state", "report_year", "report_quarter",
         "population", "median_income",
         "composite_score", "score_tier", "rank_national",
         "component_scores",
-    ).write.mode("overwrite").saveAsTable(f"{catalog}.{GOLD_SCHEMA}.gold_county_growth_score")
+    ]
+    # Only select columns that exist (some may be missing if sources are unavailable)
+    available = set(scored_df.columns)
+    select_cols = [c for c in score_cols if c in available]
+    scored_df.select(*select_cols).write.mode("overwrite").option(
+        "overwriteSchema", "true"
+    ).saveAsTable(f"{catalog}.{GOLD_SCHEMA}.gold_county_growth_score")
 
     indicator_df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{catalog}.{GOLD_SCHEMA}.gold_county_details")
 

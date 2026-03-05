@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useMemo } from "react";
 import DeckGL from "@deck.gl/react";
 import { GeoJsonLayer } from "@deck.gl/layers";
 import { Map } from "react-map-gl/maplibre";
@@ -20,6 +20,20 @@ const TIER_COLORS: Record<string, [number, number, number, number]> = {
   F: [220, 20, 60, 200],
 };
 
+const STATE_FIPS: Record<string, string> = {
+  "01": "AL", "02": "AK", "04": "AZ", "05": "AR", "06": "CA",
+  "08": "CO", "09": "CT", "10": "DE", "11": "DC", "12": "FL",
+  "13": "GA", "15": "HI", "16": "ID", "17": "IL", "18": "IN",
+  "19": "IA", "20": "KS", "21": "KY", "22": "LA", "23": "ME",
+  "24": "MD", "25": "MA", "26": "MI", "27": "MN", "28": "MS",
+  "29": "MO", "30": "MT", "31": "NE", "32": "NV", "33": "NH",
+  "34": "NJ", "35": "NM", "36": "NY", "37": "NC", "38": "ND",
+  "39": "OH", "40": "OK", "41": "OR", "42": "PA", "44": "RI",
+  "45": "SC", "46": "SD", "47": "TN", "48": "TX", "49": "UT",
+  "50": "VT", "51": "VA", "53": "WA", "54": "WV", "55": "WI",
+  "56": "WY",
+};
+
 interface Props {
   onSelectCounty: (fips: string) => void;
   refreshKey: number;
@@ -36,6 +50,17 @@ export function NationalMap({ onSelectCounty, refreshKey }: Props) {
     api.getGeoJson().then(setGeojson);
   }, [refreshKey]);
 
+  const states = useMemo(() => {
+    if (!geojson) return [];
+    const seen = new Set<string>();
+    for (const f of geojson.features || []) {
+      const st = f.properties?.STATE;
+      if (st && STATE_FIPS[st]) seen.add(st);
+    }
+    return Array.from(seen)
+      .sort((a, b) => (STATE_FIPS[a] || "").localeCompare(STATE_FIPS[b] || ""))
+  }, [geojson]);
+
   const layers = geojson
     ? [
         new GeoJsonLayer({
@@ -50,9 +75,9 @@ export function NationalMap({ onSelectCounty, refreshKey }: Props) {
             const tier = props.score_tier || "F";
             const score = props.composite_score || 0;
 
-            if (stateFilter && props.STATE !== stateFilter) return [200, 200, 200, 50];
-            if (tierFilter && tier !== tierFilter) return [200, 200, 200, 50];
-            if (score < minScore) return [200, 200, 200, 50];
+            if (stateFilter && props.STATE !== stateFilter) return [200, 200, 200, 50] as [number, number, number, number];
+            if (tierFilter && tier !== tierFilter) return [200, 200, 200, 50] as [number, number, number, number];
+            if (score < minScore) return [200, 200, 200, 50] as [number, number, number, number];
 
             return TIER_COLORS[tier] || TIER_COLORS.F;
           },
@@ -74,6 +99,9 @@ export function NationalMap({ onSelectCounty, refreshKey }: Props) {
       <div className="map-filters">
         <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)}>
           <option value="">All States</option>
+          {states.map((st) => (
+            <option key={st} value={st}>{STATE_FIPS[st]}</option>
+          ))}
         </select>
         <select value={tierFilter} onChange={(e) => setTierFilter(e.target.value)}>
           <option value="">All Tiers</option>
