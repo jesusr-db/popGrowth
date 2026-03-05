@@ -3,7 +3,7 @@ resources:
     store_siting_app:
       name: "store-siting"
       description: "QSR Store Siting — Growth Score Explorer"
-      source_code_path: src/app
+      source_code_path: ../src/app
       config:
         command:
           - uvicorn
@@ -14,7 +14,7 @@ resources:
           - "8000"
         env:
           - name: DATABRICKS_HOST
-            value: ${var.workspace_host}
+            value: "https://fe-vm-vdm-classic-rikfy0.cloud.databricks.com"
           - name: DATABRICKS_HTTP_PATH
             value: /sql/1.0/warehouses/${var.warehouse_id}
           - name: CATALOG

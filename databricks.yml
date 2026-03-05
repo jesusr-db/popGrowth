@@ -2,18 +2,16 @@ bundle:
   name: store-siting
 
 workspace:
-  host: ${var.workspace_host}
+  host: https://fe-vm-vdm-classic-rikfy0.cloud.databricks.com
+  profile: DEFAULT
 
 variables:
-  workspace_host:
-    description: "Databricks workspace URL"
   catalog:
     default: store_siting
     description: "Unity Catalog name"
   warehouse_id:
+    default: "5067b513037fbf07"
     description: "SQL Warehouse ID for app queries"
-  cluster_id:
-    description: "Cluster ID for pipeline jobs"
 
 include:
   - resources/*.yml

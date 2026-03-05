@@ -5,9 +5,19 @@ resources:
       schedule:
         quartz_cron_expression: "0 0 6 15 6 ?"
         timezone_id: "America/New_York"
+      job_clusters:
+        - job_cluster_key: main
+          new_cluster:
+            spark_version: "15.4.x-scala2.12"
+            num_workers: 0
+            spark_conf:
+              spark.master: "local[*]"
+              spark.databricks.cluster.profile: singleNode
+            custom_tags:
+              ResourceClass: SingleNode
       tasks:
         - task_key: ingest
+          job_cluster_key: main
           spark_python_task:
-            python_file: src/jobs/ingest_business_patterns.py
+            python_file: ../../src/jobs/ingest_business_patterns.py
             source: WORKSPACE
-          existing_cluster_id: ${var.cluster_id}
