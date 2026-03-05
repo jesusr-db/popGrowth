@@ -6,16 +6,15 @@ DEFAULT_WEIGHTS = {
     "vacancy_change": 0.15,
     "employment_growth": 0.15,
     "school_enrollment_growth": 0.10,
-    "ssp_projected_growth": 0.10,
-    "qsr_density_inv": 0.05,
+    "ssp_projected_growth": 0.15,
 }
 
 SCORE_TIERS = {
     "A": (80, 100),
-    "B": (60, 79),
-    "C": (40, 59),
-    "D": (20, 39),
-    "F": (0, 19),
+    "B": (60, 80),
+    "C": (40, 60),
+    "D": (20, 40),
+    "F": (0, 20),
 }
 
 import os

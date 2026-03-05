@@ -18,16 +18,20 @@ export interface ComponentScores {
   employment_growth: number;
   school_enrollment_growth: number;
   ssp_projected_growth: number;
-  qsr_density_inv: number;
 }
 
 export interface CountyDetail extends CountySummary {
   component_scores: ComponentScores;
   permits_per_1k_pop?: number;
   net_migration_rate?: number;
-  vacancy_rate_yoy_change?: number;
-  employment_growth_rate?: number;
-  enrollment_growth_rate?: number;
+  occupancy_rate?: number;
+  employment_per_capita?: number;
+  enrollment_per_capita?: number;
+  avg_weekly_wage?: number;
+  vacancy_rate?: number;
+  ssp_projected_pop?: number;
+  ssp_projection_year?: number;
+  ssp_growth_rate?: number;
 }
 
 export interface ScoringWeight {

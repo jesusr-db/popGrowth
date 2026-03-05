@@ -18,7 +18,7 @@ def update_weights(payload: ScoringWeightsUpdate):
     valid_indicators = {
         "building_permits", "net_migration", "vacancy_change",
         "employment_growth", "school_enrollment_growth",
-        "ssp_projected_growth", "qsr_density_inv",
+        "ssp_projected_growth",
     }
     for w in payload.weights:
         if w.indicator not in valid_indicators:

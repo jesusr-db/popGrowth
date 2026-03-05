@@ -8,7 +8,6 @@ const INDICATOR_LABELS: Record<string, string> = {
   employment_growth: "Employment Growth",
   school_enrollment_growth: "School Enrollment",
   ssp_projected_growth: "SSP Projections",
-  qsr_density_inv: "QSR White Space",
 };
 
 interface Props {

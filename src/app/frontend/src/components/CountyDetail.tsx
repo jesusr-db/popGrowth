@@ -16,12 +16,15 @@ const INDICATOR_LABELS: Record<string, string> = {
   vacancy_change: "Occupancy",
   employment_growth: "Employment",
   school_enrollment_growth: "School Enrollment",
-  ssp_projected_growth: "SSP Projections",
-  qsr_density_inv: "QSR White Space",
+  ssp_projected_growth: "Pop. Projections",
 };
 
 const TIER_BADGE_COLORS: Record<string, string> = {
-  A: "#228B22", B: "#90EE90", C: "#FFD700", D: "#FF8C00", F: "#DC143C",
+  A: "#228B22", B: "#6BAF6B", C: "#E6A817", D: "#E07020", F: "#C41E3A",
+};
+
+const TIER_LABELS: Record<string, string> = {
+  A: "Top 10%", B: "Top 30%", C: "Top 60%", D: "Top 85%", F: "Bottom 15%",
 };
 
 export function CountyDetail({ fips, onClose }: Props) {
@@ -50,7 +53,7 @@ export function CountyDetail({ fips, onClose }: Props) {
   const componentScores = detail.component_scores || {};
   const radarData = Object.entries(INDICATOR_LABELS).map(([key, label]) => ({
     indicator: label,
-    value: ((componentScores[key] as number) || 0) * 100,
+    value: Math.round(((componentScores[key] as number) || 0) * 100),
   }));
 
   const fmt = (v: any, decimals = 1) =>
@@ -59,25 +62,31 @@ export function CountyDetail({ fips, onClose }: Props) {
   const fmtInt = (v: any) =>
     v != null && v !== undefined ? Number(v).toLocaleString() : "N/A";
 
+  const fmtPct = (v: any) =>
+    v != null && v !== undefined ? `${(Number(v) * 100).toFixed(1)}%` : "N/A";
+
+  const tier = detail.score_tier || "F";
+  const tierColor = TIER_BADGE_COLORS[tier] || "#999";
+
   return (
     <div className="county-detail">
       <div className="detail-header">
         <div>
           <h2>{detail.county_name || fips}, {detail.state || "??"}</h2>
-          <span
-            className="tier-badge"
-            style={{ backgroundColor: TIER_BADGE_COLORS[detail.score_tier] || "#999" }}
-          >
-            Tier {detail.score_tier}
+          <span className="tier-badge" style={{ backgroundColor: tierColor }}>
+            Tier {tier}
           </span>
-          <span className="rank">Rank #{detail.rank_national}</span>
+          <span className="tier-pctile">{TIER_LABELS[tier]}</span>
+          <span className="rank">Rank #{detail.rank_national} of 3,209</span>
         </div>
-        <button className="close-btn" onClick={onClose}>x</button>
+        <button className="close-btn" onClick={onClose}>×</button>
       </div>
 
       <div className="score-display">
-        <span className="big-score">{fmt(detail.composite_score)}</span>
-        <span className="score-label">/ 100</span>
+        <div className="score-ring" style={{ borderColor: tierColor }}>
+          <span className="big-score">{fmt(detail.composite_score, 0)}</span>
+        </div>
+        <div className="score-sublabel">Growth Score</div>
       </div>
 
       <div className="metric-cards">
@@ -101,17 +110,72 @@ export function CountyDetail({ fips, onClose }: Props) {
           </div>
           <div className="card-label">Avg Weekly Wage</div>
         </div>
+        <div className="card">
+          <div className="card-value">
+            {detail.net_migration_rate != null ? fmtPct(detail.net_migration_rate / 100) : "N/A"}
+          </div>
+          <div className="card-label">Net Migration Rate</div>
+        </div>
+        <div className="card">
+          <div className="card-value">
+            {detail.occupancy_rate != null ? fmtPct(detail.occupancy_rate) : "N/A"}
+          </div>
+          <div className="card-label">Occupancy Rate</div>
+        </div>
       </div>
 
+      {(detail.ssp_projected_pop || detail.ssp_growth_rate != null) && (
+        <div className="projection-section">
+          <h3>Population Projections (SSP2)</h3>
+          <div className="projection-cards">
+            <div className="projection-card">
+              <div className="projection-value">{fmtInt(detail.population)}</div>
+              <div className="projection-label">Current Pop.</div>
+            </div>
+            <div className="projection-arrow">→</div>
+            <div className="projection-card">
+              <div className="projection-value">{fmtInt(detail.ssp_projected_pop)}</div>
+              <div className="projection-label">
+                Projected {detail.ssp_projection_year || ""}
+              </div>
+            </div>
+          </div>
+          {detail.ssp_growth_rate != null && (
+            <div className={`projection-growth ${detail.ssp_growth_rate >= 0 ? "positive" : "negative"}`}>
+              {detail.ssp_growth_rate >= 0 ? "▲" : "▼"}{" "}
+              {fmtPct(Math.abs(detail.ssp_growth_rate))} projected growth
+            </div>
+          )}
+          <div className="projection-note">
+            Based on IIASA SSP2 (middle-of-the-road) scenario at state level
+          </div>
+        </div>
+      )}
+
       <h3>Component Scores</h3>
-      <ResponsiveContainer width="100%" height={250}>
+      <ResponsiveContainer width="100%" height={260}>
         <RadarChart data={radarData}>
           <PolarGrid />
           <PolarAngleAxis dataKey="indicator" tick={{ fontSize: 10 }} />
-          <PolarRadiusAxis domain={[0, 100]} />
-          <Radar dataKey="value" stroke="#4A90D9" fill="#4A90D9" fillOpacity={0.3} />
+          <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+          <Radar dataKey="value" stroke={tierColor} fill={tierColor} fillOpacity={0.25} />
         </RadarChart>
       </ResponsiveContainer>
+
+      <div className="component-bars">
+        {radarData.map((d) => (
+          <div key={d.indicator} className="bar-row">
+            <span className="bar-label">{d.indicator}</span>
+            <div className="bar-track">
+              <div
+                className="bar-fill"
+                style={{ width: `${d.value}%`, backgroundColor: tierColor }}
+              />
+            </div>
+            <span className="bar-value">{d.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

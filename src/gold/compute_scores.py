@@ -94,20 +94,47 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
     )
 
     ssp_raw = _try_table(spark, f"{silver}.silver_ssp_projections")
-    ssp = (
-        _latest_per_fips(
-            ssp_raw.filter(col("scenario") == "SSP2")
-            .withColumnRenamed("projection_year", "report_year"),
-            ["projected_population"],
+    ssp = None
+    if ssp_raw is not None:
+        from pyspark.sql.functions import substring, max as spark_max
+        # SSP data is state-level (state_fips in fips column or 2-digit codes)
+        # Get the latest projection year per state for SSP2 scenario
+        ssp_filtered = ssp_raw.filter(col("scenario") == "SSP2")
+        # Determine if fips is 2-digit state or 5-digit county
+        ssp_cols = ssp_filtered.columns
+        if "state_fips" in ssp_cols:
+            ssp_state_col = col("state_fips")
+        else:
+            # fips might be 2-digit state codes
+            ssp_state_col = col("fips")
+        # Get max projection year per state for the growth rate
+        ssp_latest = ssp_filtered.withColumn("_state", ssp_state_col)
+        w_ssp = Window.partitionBy("_state").orderBy(col("projection_year").desc())
+        ssp_latest = (
+            ssp_latest.withColumn("_rn", row_number().over(w_ssp))
+            .filter(col("_rn") == 1)
+            .drop("_rn")
+            .select(
+                col("_state").alias("_ssp_state"),
+                col("projected_population").alias("ssp_projected_pop"),
+                col("projection_year").alias("ssp_projection_year"),
+                coalesce(col("projected_growth_rate"), lit(0.0)).alias("ssp_growth_rate"),
+            )
         )
-        if ssp_raw else None
-    )
+        ssp = ssp_latest
 
     # --- Join everything on fips only ---
     combined = permits.join(base, on="fips", how="outer")
-    for df in [migration, vacancy, employment, school, business, ssp]:
+    for df in [migration, vacancy, employment, school, business]:
         if df is not None:
             combined = combined.join(df, on="fips", how="left")
+
+    # SSP joins on state prefix (first 2 digits of FIPS)
+    if ssp is not None:
+        from pyspark.sql.functions import substring
+        combined = combined.withColumn("_state_fips", substring(col("fips"), 1, 2))
+        combined = combined.join(ssp, combined["_state_fips"] == ssp["_ssp_state"], "left")
+        combined = combined.drop("_state_fips", "_ssp_state")
 
     state_udf = udf(fips_to_state_abbr, StringType())
     combined = combined.withColumn("state", state_udf(col("fips")))
@@ -139,10 +166,15 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
 
 
 def score_counties(indicator_df: DataFrame, weights: dict | None = None) -> DataFrame:
-    """Normalize indicators and compute composite scores."""
+    """Normalize indicators and compute composite scores.
+
+    Uses adaptive weighting: if an indicator is NULL for a county, its weight
+    is redistributed proportionally among available indicators. This prevents
+    missing data from dragging scores to zero.
+    """
     w = weights or DEFAULT_WEIGHTS
 
-    from pyspark.sql.functions import min as spark_min, max as spark_max
+    from pyspark.sql.functions import min as spark_min, max as spark_max, greatest
 
     indicator_cols = {
         "building_permits": "permits_per_1k_pop",
@@ -150,61 +182,85 @@ def score_counties(indicator_df: DataFrame, weights: dict | None = None) -> Data
         "vacancy_change": "occupancy_rate",
         "employment_growth": "employment_per_capita",
         "school_enrollment_growth": "enrollment_per_capita",
-        "ssp_projected_growth": "projected_population",
-        "qsr_density_inv": "qsr_establishments",
+        "ssp_projected_growth": "ssp_growth_rate",
     }
 
     # These indicators are inverted: higher raw value = lower score
-    inverted = {"qsr_density_inv"}
+    inverted = set()
 
     df = indicator_df
     available_cols = set(df.columns)
 
     for indicator_name, source_col in indicator_cols.items():
+        has_col = f"_has_{indicator_name}"
+        norm_col = f"_norm_{indicator_name}"
+
         if source_col not in available_cols:
-            # Missing indicator — set normalized score to 0
-            df = df.withColumn(f"_norm_{indicator_name}", lit(0.0))
+            df = df.withColumn(norm_col, lit(None).cast(DoubleType()))
+            df = df.withColumn(has_col, lit(0.0))
             continue
 
         min_col = f"_min_{indicator_name}"
         max_col = f"_max_{indicator_name}"
 
-        df = df.withColumn(min_col, spark_min(col(source_col)).over(Window.orderBy(lit(1)).rowsBetween(
-            Window.unboundedPreceding, Window.unboundedFollowing)))
-        df = df.withColumn(max_col, spark_max(col(source_col)).over(Window.orderBy(lit(1)).rowsBetween(
-            Window.unboundedPreceding, Window.unboundedFollowing)))
+        full_window = Window.orderBy(lit(1)).rowsBetween(
+            Window.unboundedPreceding, Window.unboundedFollowing)
+        df = df.withColumn(min_col, spark_min(col(source_col)).over(full_window))
+        df = df.withColumn(max_col, spark_max(col(source_col)).over(full_window))
 
-        norm_col = f"_norm_{indicator_name}"
         range_expr = col(max_col) - col(min_col)
         normalized = when(
+            col(source_col).isNull(), lit(None).cast(DoubleType())
+        ).when(
             range_expr == 0, lit(0.5)
         ).otherwise(
             (col(source_col) - col(min_col)) / range_expr
         )
 
         if indicator_name in inverted:
-            normalized = lit(1.0) - normalized
+            normalized = when(normalized.isNull(), lit(None)).otherwise(lit(1.0) - normalized)
 
-        df = df.withColumn(norm_col, coalesce(normalized, lit(0.0)))
+        df = df.withColumn(norm_col, normalized)
+        # Track which indicators are available per row
+        df = df.withColumn(has_col, when(col(source_col).isNotNull(), lit(w[indicator_name])).otherwise(lit(0.0)))
         df = df.drop(min_col, max_col)
 
+    # Adaptive weighting: sum of available weights per row, then rescale
+    available_weight_expr = sum(col(f"_has_{name}") for name in w)
+    df = df.withColumn("_available_weight", greatest(available_weight_expr, lit(0.01)))
+
+    # Score = sum(norm * weight / available_weight) * 100
     score_expr = sum(
-        col(f"_norm_{name}") * lit(w[name])
+        coalesce(col(f"_norm_{name}"), lit(0.0)) * lit(w[name])
         for name in w
-    ) * 100
+    ) / col("_available_weight") * 100
 
     df = df.withColumn("composite_score", score_expr)
-    df = df.withColumn("score_tier", udf(assign_tier, StringType())(col("composite_score")))
+
+    # Use percentile-based tier assignment via ntile
+    from pyspark.sql.functions import ntile
+    tier_window = Window.orderBy(col("composite_score").desc())
+    df = df.withColumn("_pctile", ntile(100).over(tier_window))
+    df = df.withColumn("score_tier",
+        when(col("_pctile") <= 10, lit("A"))
+        .when(col("_pctile") <= 30, lit("B"))
+        .when(col("_pctile") <= 60, lit("C"))
+        .when(col("_pctile") <= 85, lit("D"))
+        .otherwise(lit("F"))
+    )
+    df = df.drop("_pctile")
 
     rank_window = Window.orderBy(col("composite_score").desc())
     df = df.withColumn("rank_national", row_number().over(rank_window))
 
     df = df.withColumn("component_scores", struct(
-        *[col(f"_norm_{name}").alias(name) for name in w]
+        *[coalesce(col(f"_norm_{name}"), lit(0.0)).alias(name) for name in w]
     ))
 
     for name in w:
         df = df.drop(f"_norm_{name}")
+        df = df.drop(f"_has_{name}")
+    df = df.drop("_available_weight")
 
     return df
 
@@ -219,6 +275,7 @@ def run_gold_scoring(spark: SparkSession, catalog: str = CATALOG):
         "population", "median_income",
         "composite_score", "score_tier", "rank_national",
         "component_scores",
+        "ssp_projected_pop", "ssp_projection_year", "ssp_growth_rate",
     ]
     # Only select columns that exist (some may be missing if sources are unavailable)
     available = set(scored_df.columns)

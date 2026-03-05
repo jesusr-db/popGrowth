@@ -8,7 +8,6 @@ class ComponentScores(BaseModel):
     employment_growth: float = 0
     school_enrollment_growth: float = 0
     ssp_projected_growth: float = 0
-    qsr_density_inv: float = 0
 
 
 class CountySummary(BaseModel):
@@ -31,6 +30,9 @@ class CountyDetail(CountySummary):
     enrollment_per_capita: float | None = None
     avg_weekly_wage: float | None = None
     vacancy_rate: float | None = None
+    ssp_projected_pop: int | None = None
+    ssp_projection_year: int | None = None
+    ssp_growth_rate: float | None = None
 
 
 class ScoringWeight(BaseModel):
