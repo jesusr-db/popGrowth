@@ -2,7 +2,7 @@
 
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import (
-    col, struct, lit, udf, row_number, coalesce,
+    col, struct, lit, udf, row_number, coalesce, when,
     count as spark_count,
 )
 from pyspark.sql.window import Window
@@ -149,7 +149,11 @@ def score_counties(indicator_df: DataFrame, weights: dict | None = None) -> Data
 
         norm_col = f"_norm_{indicator_name}"
         range_expr = col(max_col) - col(min_col)
-        normalized = (col(source_col) - col(min_col)) / range_expr
+        normalized = when(
+            range_expr == 0, lit(0.5)
+        ).otherwise(
+            (col(source_col) - col(min_col)) / range_expr
+        )
 
         if indicator_name in inverted:
             normalized = lit(1.0) - normalized
