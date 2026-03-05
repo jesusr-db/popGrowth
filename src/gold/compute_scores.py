@@ -13,6 +13,18 @@ from src.common.fips import fips_to_state_abbr
 from src.gold.scoring import compute_composite_score, assign_tier
 
 
+def _try_table(spark, table_name):
+    """Try to read a Silver table; return None if it doesn't exist."""
+    import logging
+    try:
+        return spark.table(table_name)
+    except Exception as e:
+        if "TABLE_OR_VIEW_NOT_FOUND" in str(e) or "does not exist" in str(e):
+            logging.getLogger(__name__).warning(f"Skipping missing table: {table_name}")
+            return None
+        raise
+
+
 def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFrame:
     """Join all Silver tables into a single indicator table per county per quarter."""
     silver = f"{catalog}.{SILVER_SCHEMA}"
@@ -30,57 +42,61 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
                 col("multi_family_units").alias("bp_multi"))
     )
 
+    migration_raw = _try_table(spark, f"{silver}.silver_migration")
     migration = (
-        spark.table(f"{silver}.silver_migration")
-        .select("fips", "report_year", "report_quarter",
+        migration_raw.select("fips", "report_year", "report_quarter",
                 "net_migration", "net_migration_rate")
+        if migration_raw else None
     )
 
+    vacancy_raw = _try_table(spark, f"{silver}.silver_vacancy")
     vacancy = (
-        spark.table(f"{silver}.silver_vacancy")
-        .select("fips", "report_year", "report_quarter",
+        vacancy_raw.select("fips", "report_year", "report_quarter",
                 "vacancy_rate", "vacancy_rate_yoy_change")
+        if vacancy_raw else None
     )
 
+    employment_raw = _try_table(spark, f"{silver}.silver_employment")
     employment = (
-        spark.table(f"{silver}.silver_employment")
-        .select("fips", "report_year", "report_quarter",
+        employment_raw.select("fips", "report_year", "report_quarter",
                 "employment_growth_rate", "avg_weekly_wage")
+        if employment_raw else None
     )
 
+    school_raw = _try_table(spark, f"{silver}.silver_school_enrollment")
     school = (
-        spark.table(f"{silver}.silver_school_enrollment")
-        .select("fips", "report_year", "enrollment_growth_rate")
+        school_raw.select("fips", "report_year", "enrollment_growth_rate")
+        if school_raw else None
     )
 
+    business_raw = _try_table(spark, f"{silver}.silver_business_patterns")
     business = (
-        spark.table(f"{silver}.silver_business_patterns")
-        .select("fips", "report_year", "qsr_establishments", "retail_density")
+        business_raw.select("fips", "report_year", "qsr_establishments", "retail_density")
+        if business_raw else None
     )
 
+    ssp_raw = _try_table(spark, f"{silver}.silver_ssp_projections")
     ssp = (
-        spark.table(f"{silver}.silver_ssp_projections")
-        .filter(col("scenario") == "SSP2")
+        ssp_raw.filter(col("scenario") == "SSP2")
         .select("fips", col("projection_year").alias("report_year"),
                 col("projected_population"))
+        if ssp_raw else None
     )
 
     join_keys_yr = ["fips", "report_year"]
     join_keys_qtr = ["fips", "report_year", "report_quarter"]
 
-    latest_q = (
-        permits.join(migration, on=join_keys_qtr, how="outer")
-               .join(vacancy, on=join_keys_qtr, how="outer")
-               .join(employment, on=join_keys_qtr, how="outer")
-    )
+    # Start with permits as base quarterly table
+    combined = permits
+    for df in [migration, vacancy, employment]:
+        if df is not None:
+            combined = combined.join(df, on=join_keys_qtr, how="outer")
 
-    combined = (
-        latest_q
-        .join(base, on=join_keys_yr[:2], how="outer")
-        .join(school, on=join_keys_yr[:2], how="left")
-        .join(business, on=join_keys_yr[:2], how="left")
-        .join(ssp, on=join_keys_yr[:2], how="left")
-    )
+    # Join annual tables
+    combined = combined.join(base, on=join_keys_yr, how="outer")
+    for df in [school, business, ssp]:
+        if df is not None:
+            combined = combined.join(df, on=join_keys_yr, how="left")
 
     state_udf = udf(fips_to_state_abbr, StringType())
     combined = combined.withColumn("state", state_udf(col("fips")))
@@ -112,7 +128,14 @@ def score_counties(indicator_df: DataFrame, weights: dict | None = None) -> Data
     inverted = {"vacancy_change", "qsr_density_inv"}
 
     df = indicator_df
+    available_cols = set(df.columns)
+
     for indicator_name, source_col in indicator_cols.items():
+        if source_col not in available_cols:
+            # Missing indicator — set normalized score to 0
+            df = df.withColumn(f"_norm_{indicator_name}", lit(0.0))
+            continue
+
         min_col = f"_min_{indicator_name}"
         max_col = f"_max_{indicator_name}"
 
