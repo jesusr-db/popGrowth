@@ -22,9 +22,12 @@ def log_ingestion(
     rows_loaded: int | None = None,
     error_msg: str | None = None,
     started_at: datetime | None = None,
-    catalog: str = "store_siting",
+    catalog: str | None = None,
 ):
     """Write a row to the ingestion log table."""
+    if catalog is None:
+        from src.common.config import CATALOG
+        catalog = CATALOG
     now = datetime.now(timezone.utc)
     row = [(
         source_name,

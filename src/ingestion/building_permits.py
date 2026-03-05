@@ -61,8 +61,11 @@ def download_and_parse(year: int, month: int) -> list[dict[str, Any]]:
         os.unlink(tmp_path)
 
 
-def ingest(spark, year: int, month: int, catalog: str = "store_siting"):
+def ingest(spark, year: int, month: int, catalog: str | None = None):
     """Full ingestion: download, parse, write to Bronze Delta table."""
+    if catalog is None:
+        from src.common.config import CATALOG
+        catalog = CATALOG
     from pyspark.sql.functions import lit, current_timestamp
     from src.common.ingestion_logger import log_ingestion
 

@@ -48,8 +48,11 @@ def download_and_parse(scenario: str = "SSP2") -> list[dict[str, Any]]:
         os.unlink(tmp_path)
 
 
-def ingest(spark, scenario: str = "SSP2", catalog: str = "store_siting"):
+def ingest(spark, scenario: str = "SSP2", catalog: str | None = None):
     from pyspark.sql.functions import lit, current_timestamp
+    if catalog is None:
+        from src.common.config import CATALOG
+        catalog = CATALOG
     from src.common.ingestion_logger import log_ingestion
 
     started_at = datetime.now(timezone.utc)
