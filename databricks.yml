@@ -1,0 +1,25 @@
+bundle:
+  name: store-siting
+
+workspace:
+  host: ${var.workspace_host}
+
+variables:
+  workspace_host:
+    description: "Databricks workspace URL"
+  catalog:
+    default: store_siting
+    description: "Unity Catalog name"
+  warehouse_id:
+    description: "SQL Warehouse ID for app queries"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    variables:
+      catalog: store_siting_dev
+
+  prod:
+    variables:
+      catalog: store_siting
