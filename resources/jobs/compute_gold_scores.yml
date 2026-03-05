@@ -1,0 +1,12 @@
+resources:
+  jobs:
+    compute_gold_scores:
+      name: "store-siting-compute-gold-scores"
+      tasks:
+        - task_key: run_gold_scoring
+          python_wheel_task:
+            package_name: store_siting
+            entry_point: gold_scoring
+          libraries:
+            - whl: ../dist/*.whl
+          existing_cluster_id: ${var.cluster_id}
