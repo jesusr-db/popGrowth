@@ -2,19 +2,13 @@ resources:
   jobs:
     transform_silver:
       name: "store-siting-transform-silver"
-      job_clusters:
-        - job_cluster_key: main
-          new_cluster:
-            spark_version: "15.4.x-scala2.12"
-            num_workers: 0
-            spark_conf:
-              spark.master: "local[*]"
-              spark.databricks.cluster.profile: singleNode
-            custom_tags:
-              ResourceClass: SingleNode
       tasks:
         - task_key: run_silver_transforms
-          job_cluster_key: main
+          environment_key: default
           spark_python_task:
             python_file: ../../src/jobs/transform_silver.py
             source: WORKSPACE
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
