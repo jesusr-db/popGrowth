@@ -1,11 +1,15 @@
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src", "app"))
+
 from unittest.mock import patch
 from fastapi.testclient import TestClient
-from src.app.backend.main import app
+from backend.main import app
 
 client = TestClient(app)
 
 
-@patch("src.app.backend.routes.counties.execute_query")
+@patch("backend.routes.counties.execute_query")
 def test_list_counties(mock_query):
     mock_query.return_value = [
         {"fips": "12086", "county_name": "Miami-Dade", "state": "FL",
@@ -19,7 +23,7 @@ def test_list_counties(mock_query):
     assert data[0]["fips"] == "12086"
 
 
-@patch("src.app.backend.routes.counties.execute_query")
+@patch("backend.routes.counties.execute_query")
 def test_top_counties_default_25(mock_query):
     mock_query.return_value = []
     response = client.get("/api/counties/top")
@@ -28,7 +32,7 @@ def test_top_counties_default_25(mock_query):
     assert "LIMIT 25" in call_args
 
 
-@patch("src.app.backend.routes.counties.execute_query")
+@patch("backend.routes.counties.execute_query")
 def test_get_county_not_found(mock_query):
     mock_query.return_value = []
     response = client.get("/api/counties/99999")
