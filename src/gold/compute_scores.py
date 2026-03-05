@@ -194,7 +194,7 @@ def run_gold_scoring(spark: SparkSession, catalog: str = CATALOG):
         "component_scores",
     ).write.mode("overwrite").saveAsTable(f"{catalog}.{GOLD_SCHEMA}.gold_county_growth_score")
 
-    indicator_df.write.mode("overwrite").saveAsTable(f"{catalog}.{GOLD_SCHEMA}.gold_county_details")
+    indicator_df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(f"{catalog}.{GOLD_SCHEMA}.gold_county_details")
 
     from pyspark.sql import Row
     config_rows = [Row(indicator=k, weight=v) for k, v in DEFAULT_WEIGHTS.items()]
