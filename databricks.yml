@@ -12,6 +12,12 @@ variables:
     description: "Unity Catalog name"
   warehouse_id:
     description: "SQL Warehouse ID for app queries"
+  cluster_id:
+    description: "Cluster ID for pipeline jobs"
+
+include:
+  - resources/*.yml
+  - resources/jobs/*.yml
 
 targets:
   dev:

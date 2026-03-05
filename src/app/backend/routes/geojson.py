@@ -20,9 +20,14 @@ def get_geojson():
     score_lookup = {r["fips"]: r for r in scores}
 
     if _geojson_cache is None:
+        # Look in app/data first (DABs bundled), fall back to repo root
         geojson_path = os.path.join(
-            os.path.dirname(__file__), "..", "..", "..", "..", "data", "county_geojson", "us-counties.json"
+            os.path.dirname(__file__), "..", "..", "data", "us-counties.json"
         )
+        if not os.path.exists(geojson_path):
+            geojson_path = os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "..", "data", "county_geojson", "us-counties.json"
+            )
         with open(geojson_path) as f:
             _geojson_cache = json.load(f)
 

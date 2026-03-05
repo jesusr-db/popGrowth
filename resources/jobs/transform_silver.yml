@@ -4,9 +4,7 @@ resources:
       name: "store-siting-transform-silver"
       tasks:
         - task_key: run_silver_transforms
-          python_wheel_task:
-            package_name: store_siting
-            entry_point: silver_transforms
-          libraries:
-            - whl: ../dist/*.whl
+          spark_python_task:
+            python_file: src/jobs/transform_silver.py
+            source: WORKSPACE
           existing_cluster_id: ${var.cluster_id}
