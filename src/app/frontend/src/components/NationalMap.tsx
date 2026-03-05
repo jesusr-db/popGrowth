@@ -1,9 +1,8 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { GeoJsonLayer } from "@deck.gl/layers";
 import MapGL, { useControl, NavigationControl } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { api } from "../api/client";
 
 const INITIAL_VIEW = {
   longitude: -98.5,
@@ -14,11 +13,11 @@ const INITIAL_VIEW = {
 };
 
 const TIER_COLORS: Record<string, [number, number, number, number]> = {
-  A: [34, 139, 34, 200],
-  B: [144, 238, 144, 200],
-  C: [255, 215, 0, 200],
-  D: [255, 140, 0, 200],
-  F: [220, 20, 60, 200],
+  A: [21, 128, 61, 220],
+  B: [74, 175, 100, 200],
+  C: [230, 168, 23, 200],
+  D: [224, 112, 32, 200],
+  F: [196, 30, 58, 180],
 };
 
 const STATE_FIPS: Record<string, string> = {
@@ -42,20 +41,15 @@ function DeckGLOverlay(props: { layers: any[] }) {
 }
 
 interface Props {
+  geojson: any | null;
   onSelectCounty: (fips: string) => void;
-  refreshKey: number;
 }
 
-export function NationalMap({ onSelectCounty, refreshKey }: Props) {
-  const [geojson, setGeojson] = useState<any | null>(null);
+export function NationalMap({ geojson, onSelectCounty }: Props) {
   const [hovered, setHovered] = useState<any>(null);
   const [stateFilter, setStateFilter] = useState<string>("");
   const [tierFilter, setTierFilter] = useState<string>("");
   const [minScore, setMinScore] = useState<number>(0);
-
-  useEffect(() => {
-    api.getGeoJson().then(setGeojson);
-  }, [refreshKey]);
 
   const states = useMemo(() => {
     if (!geojson) return [];
