@@ -19,6 +19,5 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-migration").getOrCreate()
 
-now = datetime.now()
-quarter = (now.month - 1) // 3 + 1
-ingest(spark, now.year, quarter)
+# IRS SOI migration data lags ~3 years (latest is typically 2021-2022)
+ingest(spark, 2022, 4)

@@ -19,6 +19,7 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-hud-construction").getOrCreate()
 
+# Census building permits data lags ~2 months
 now = datetime.now()
 quarter = (now.month - 1) // 3 + 1
-ingest(spark, now.year, quarter)
+ingest(spark, now.year - 1, quarter)

@@ -19,6 +19,7 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-vacancy").getOrCreate()
 
+# Census ACS vacancy data lags ~2 years
 now = datetime.now()
 quarter = (now.month - 1) // 3 + 1
-ingest(spark, now.year, quarter)
+ingest(spark, now.year - 3, quarter)

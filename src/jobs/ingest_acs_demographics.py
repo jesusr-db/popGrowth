@@ -19,4 +19,5 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-acs-demographics").getOrCreate()
 
-ingest(spark, datetime.now().year)
+# Census ACS 5-year data lags ~2 years (latest available is typically year-2)
+ingest(spark, datetime.now().year - 3)

@@ -19,4 +19,5 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-school-enrollment").getOrCreate()
 
-ingest(spark, datetime.now().year)
+# Census ACS education data lags ~2 years
+ingest(spark, datetime.now().year - 3)

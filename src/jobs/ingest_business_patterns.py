@@ -19,4 +19,5 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-business-patterns").getOrCreate()
 
-ingest(spark, datetime.now().year)
+# Census CBP data lags ~3 years (latest is typically year-3)
+ingest(spark, datetime.now().year - 4)
