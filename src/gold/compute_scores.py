@@ -71,19 +71,19 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
 
     vacancy_raw = _try_table(spark, f"{silver}.silver_vacancy")
     vacancy = (
-        _latest_per_fips(vacancy_raw, ["vacancy_rate", "vacancy_rate_yoy_change"])
+        _latest_per_fips(vacancy_raw, ["vacancy_rate"])
         if vacancy_raw else None
     )
 
     employment_raw = _try_table(spark, f"{silver}.silver_employment")
     employment = (
-        _latest_per_fips(employment_raw, ["employment_growth_rate", "avg_weekly_wage"])
+        _latest_per_fips(employment_raw, ["total_employment", "avg_weekly_wage"])
         if employment_raw else None
     )
 
     school_raw = _try_table(spark, f"{silver}.silver_school_enrollment")
     school = (
-        _latest_per_fips(school_raw, ["enrollment_growth_rate"])
+        _latest_per_fips(school_raw, ["total_enrollment"])
         if school_raw else None
     )
 
@@ -117,6 +117,24 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
         coalesce(col("total_units_permitted"), lit(0)) / col("population") * 1000
     )
 
+    # Compute per-capita metrics from raw values
+    if "total_employment" in combined.columns:
+        combined = combined.withColumn(
+            "employment_per_capita",
+            col("total_employment") / col("population")
+        )
+    if "total_enrollment" in combined.columns:
+        combined = combined.withColumn(
+            "enrollment_per_capita",
+            col("total_enrollment") / col("population")
+        )
+    # Invert vacancy rate: lower vacancy = better for store siting
+    if "vacancy_rate" in combined.columns:
+        combined = combined.withColumn(
+            "occupancy_rate",
+            lit(1.0) - coalesce(col("vacancy_rate"), lit(0.0))
+        )
+
     return combined
 
 
@@ -129,14 +147,15 @@ def score_counties(indicator_df: DataFrame, weights: dict | None = None) -> Data
     indicator_cols = {
         "building_permits": "permits_per_1k_pop",
         "net_migration": "net_migration_rate",
-        "vacancy_change": "vacancy_rate_yoy_change",
-        "employment_growth": "employment_growth_rate",
-        "school_enrollment_growth": "enrollment_growth_rate",
+        "vacancy_change": "occupancy_rate",
+        "employment_growth": "employment_per_capita",
+        "school_enrollment_growth": "enrollment_per_capita",
         "ssp_projected_growth": "projected_population",
         "qsr_density_inv": "qsr_establishments",
     }
 
-    inverted = {"vacancy_change", "qsr_density_inv"}
+    # These indicators are inverted: higher raw value = lower score
+    inverted = {"qsr_density_inv"}
 
     df = indicator_df
     available_cols = set(df.columns)
