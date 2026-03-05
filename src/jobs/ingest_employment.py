@@ -19,6 +19,5 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-employment").getOrCreate()
 
-now = datetime.now()
-quarter = (now.month - 1) // 3 + 1
-ingest(spark, now.year, quarter)
+# BLS QCEW data lags ~2 years; use year-2 Q4 as latest reliable
+ingest(spark, datetime.now().year - 2, 4)
