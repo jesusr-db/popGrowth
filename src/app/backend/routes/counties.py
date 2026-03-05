@@ -35,34 +35,41 @@ def top_counties(n: int = Query(25, ge=1, le=500), state: str | None = Query(Non
     return execute_query(query)
 
 
-@router.get("/counties/{fips}", response_model=CountyDetail)
+@router.get("/counties/{fips}")
 def get_county(fips: str):
     if not _FIPS_RE.match(fips):
         raise HTTPException(400, "FIPS must be a 5-digit code")
     catalog = os.environ.get("CATALOG", "store_siting")
-    query = f"""
-        SELECT s.*, d.*
-        FROM {catalog}.gold.gold_county_growth_score s
-        JOIN {catalog}.gold.gold_county_details d ON s.fips = d.fips
-        WHERE s.fips = '{fips}'
-    """
-    rows = execute_query(query)
-    if not rows:
+    # Get scored data
+    score_rows = execute_query(
+        f"SELECT * FROM {catalog}.gold.gold_county_growth_score WHERE fips = '{fips}'"
+    )
+    if not score_rows:
         raise HTTPException(status_code=404, detail=f"County {fips} not found")
-    return rows[0]
+    row = score_rows[0]
+
+    # Get detail data
+    detail_rows = execute_query(
+        f"SELECT * FROM {catalog}.gold.gold_county_details WHERE fips = '{fips}'"
+    )
+    if detail_rows:
+        row.update({k: v for k, v in detail_rows[0].items() if k != "fips" and v is not None})
+
+    # Parse component_scores struct if it's a string
+    cs = row.get("component_scores")
+    if isinstance(cs, str):
+        import json
+        try:
+            row["component_scores"] = json.loads(cs)
+        except (json.JSONDecodeError, TypeError):
+            row["component_scores"] = None
+
+    return row
 
 
 @router.get("/trends/{fips}")
 def get_trends(fips: str):
     if not _FIPS_RE.match(fips):
         raise HTTPException(400, "FIPS must be a 5-digit code")
-    catalog = os.environ.get("CATALOG", "store_siting")
-    query = f"""
-        SELECT report_year, report_quarter,
-               permits_per_1k_pop, net_migration_rate,
-               vacancy_rate_yoy_change, employment_growth_rate
-        FROM {catalog}.gold.gold_county_details
-        WHERE fips = '{fips}'
-        ORDER BY report_year, report_quarter
-    """
-    return execute_query(query)
+    # With single-year data per county, no time series to return yet
+    return []

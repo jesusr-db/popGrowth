@@ -2,33 +2,35 @@ from pydantic import BaseModel
 
 
 class ComponentScores(BaseModel):
-    building_permits: float
-    net_migration: float
-    vacancy_change: float
-    employment_growth: float
-    school_enrollment_growth: float
-    ssp_projected_growth: float
-    qsr_density_inv: float
+    building_permits: float = 0
+    net_migration: float = 0
+    vacancy_change: float = 0
+    employment_growth: float = 0
+    school_enrollment_growth: float = 0
+    ssp_projected_growth: float = 0
+    qsr_density_inv: float = 0
 
 
 class CountySummary(BaseModel):
     fips: str
-    county_name: str
-    state: str
-    composite_score: float
-    score_tier: str
-    rank_national: int
+    county_name: str | None = None
+    state: str | None = None
+    composite_score: float = 0
+    score_tier: str = "F"
+    rank_national: int | None = None
     population: int | None = None
     median_income: float | None = None
 
 
 class CountyDetail(CountySummary):
-    component_scores: ComponentScores
+    component_scores: ComponentScores | None = None
     permits_per_1k_pop: float | None = None
     net_migration_rate: float | None = None
-    vacancy_rate_yoy_change: float | None = None
-    employment_growth_rate: float | None = None
-    enrollment_growth_rate: float | None = None
+    occupancy_rate: float | None = None
+    employment_per_capita: float | None = None
+    enrollment_per_capita: float | None = None
+    avg_weekly_wage: float | None = None
+    vacancy_rate: float | None = None
 
 
 class ScoringWeight(BaseModel):

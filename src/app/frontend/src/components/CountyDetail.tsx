@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  ResponsiveContainer,
 } from "recharts";
-import { api, CountyDetail as CountyDetailType, TrendPoint } from "../api/client";
+import { api } from "../api/client";
 
 interface Props {
   fips: string;
@@ -13,8 +13,8 @@ interface Props {
 const INDICATOR_LABELS: Record<string, string> = {
   building_permits: "Building Permits",
   net_migration: "Net Migration",
-  vacancy_change: "Vacancy Change",
-  employment_growth: "Employment Growth",
+  vacancy_change: "Occupancy",
+  employment_growth: "Employment",
   school_enrollment_growth: "School Enrollment",
   ssp_projected_growth: "SSP Projections",
   qsr_density_inv: "QSR White Space",
@@ -25,41 +25,48 @@ const TIER_BADGE_COLORS: Record<string, string> = {
 };
 
 export function CountyDetail({ fips, onClose }: Props) {
-  const [detail, setDetail] = useState<CountyDetailType | null>(null);
-  const [trends, setTrends] = useState<TrendPoint[]>([]);
+  const [detail, setDetail] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([api.getCounty(fips), api.getTrends(fips)]).then(
-      ([d, t]) => {
+    setError(null);
+    api.getCounty(fips)
+      .then((d) => {
         setDetail(d);
-        setTrends(t);
         setLoading(false);
-      }
-    );
+      })
+      .catch((e) => {
+        setError(e.message);
+        setLoading(false);
+      });
   }, [fips]);
 
-  if (loading || !detail) return <div className="loading">Loading...</div>;
+  if (loading) return <div className="loading">Loading...</div>;
+  if (error) return <div className="loading">Error: {error}</div>;
+  if (!detail) return null;
 
-  const radarData = Object.entries(detail.component_scores).map(([key, value]) => ({
-    indicator: INDICATOR_LABELS[key] || key,
-    value: (value as number) * 100,
+  const componentScores = detail.component_scores || {};
+  const radarData = Object.entries(INDICATOR_LABELS).map(([key, label]) => ({
+    indicator: label,
+    value: ((componentScores[key] as number) || 0) * 100,
   }));
 
-  const trendData = trends.map((t) => ({
-    period: `${t.report_year} Q${t.report_quarter}`,
-    ...t,
-  }));
+  const fmt = (v: any, decimals = 1) =>
+    v != null && v !== undefined ? Number(v).toFixed(decimals) : "N/A";
+
+  const fmtInt = (v: any) =>
+    v != null && v !== undefined ? Number(v).toLocaleString() : "N/A";
 
   return (
     <div className="county-detail">
       <div className="detail-header">
         <div>
-          <h2>{detail.county_name}, {detail.state}</h2>
+          <h2>{detail.county_name || fips}, {detail.state || "??"}</h2>
           <span
             className="tier-badge"
-            style={{ backgroundColor: TIER_BADGE_COLORS[detail.score_tier] }}
+            style={{ backgroundColor: TIER_BADGE_COLORS[detail.score_tier] || "#999" }}
           >
             Tier {detail.score_tier}
           </span>
@@ -69,28 +76,30 @@ export function CountyDetail({ fips, onClose }: Props) {
       </div>
 
       <div className="score-display">
-        <span className="big-score">{detail.composite_score.toFixed(1)}</span>
+        <span className="big-score">{fmt(detail.composite_score)}</span>
         <span className="score-label">/ 100</span>
       </div>
 
       <div className="metric-cards">
         <div className="card">
-          <div className="card-value">{detail.population?.toLocaleString() ?? "N/A"}</div>
+          <div className="card-value">{fmtInt(detail.population)}</div>
           <div className="card-label">Population</div>
         </div>
         <div className="card">
           <div className="card-value">
-            ${detail.median_income?.toLocaleString() ?? "N/A"}
+            {detail.median_income != null ? `$${fmtInt(detail.median_income)}` : "N/A"}
           </div>
           <div className="card-label">Median Income</div>
         </div>
         <div className="card">
-          <div className="card-value">{detail.permits_per_1k_pop?.toFixed(1) ?? "N/A"}</div>
+          <div className="card-value">{fmt(detail.permits_per_1k_pop)}</div>
           <div className="card-label">Permits / 1K Pop</div>
         </div>
         <div className="card">
-          <div className="card-value">{detail.net_migration_rate?.toFixed(2) ?? "N/A"}</div>
-          <div className="card-label">Net Migration Rate</div>
+          <div className="card-value">
+            {detail.avg_weekly_wage != null ? `$${fmt(detail.avg_weekly_wage, 0)}` : "N/A"}
+          </div>
+          <div className="card-label">Avg Weekly Wage</div>
         </div>
       </div>
 
@@ -103,22 +112,6 @@ export function CountyDetail({ fips, onClose }: Props) {
           <Radar dataKey="value" stroke="#4A90D9" fill="#4A90D9" fillOpacity={0.3} />
         </RadarChart>
       </ResponsiveContainer>
-
-      {trendData.length > 0 && (
-        <>
-          <h3>Historical Trends</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={trendData}>
-              <XAxis dataKey="period" tick={{ fontSize: 10 }} />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="permits_per_1k_pop" stroke="#228B22" name="Permits" dot={false} />
-              <Line type="monotone" dataKey="net_migration_rate" stroke="#4A90D9" name="Migration" dot={false} />
-              <Line type="monotone" dataKey="employment_growth_rate" stroke="#FF8C00" name="Employment" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </>
-      )}
     </div>
   );
 }
