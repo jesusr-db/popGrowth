@@ -19,5 +19,8 @@ from datetime import datetime
 
 spark = SparkSession.builder.appName("ingest-building-permits").getOrCreate()
 
-# Ingest a known historical month for testing; Census data lags ~2 months
-ingest(spark, 2024, 1)
+# Census data lags ~2 months; ingest previous month
+now = datetime.now()
+month = now.month - 2 if now.month > 2 else now.month + 10
+year = now.year if now.month > 2 else now.year - 1
+ingest(spark, year, month)
