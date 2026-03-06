@@ -17,8 +17,9 @@ Transform the county-level growth score explorer into a competitive enterprise s
 | 1 | Street-level site selection (competitors, drive-times, traffic) | Build (Phases 1-3) | To implement |
 | 2 | Site comparison mode (side-by-side, up to 3 sites) | Build (Phase 4) | To implement |
 | 3 | Cannibalization analysis (drive-time overlap detection) | Build (Phase 4) | To implement |
-| 4 | AI-powered site recommendation (chat-style, Foundation Model API) | Roadmap | Future |
-| 5 | PDF report generation (single site + comparison) | Roadmap | Future |
+| 4 | County details tab — building permit trends & breakdown | Build (Phase 5) | To implement |
+| 5 | AI-powered site recommendation (chat-style, Foundation Model API) | Roadmap | Future |
+| 6 | PDF report generation (single site + comparison) | Roadmap | Future |
 
 ---
 
@@ -154,6 +155,46 @@ All computed client-side — no backend needed.
 ### Component
 
 - `CannibalizationOverlay.ts` — Turf.js polygon intersection + overlap % calculation
+
+---
+
+## Feature 4: County Details Tab — Building Permit Data
+
+Add a dedicated **Details tab** to the county detail panel that shows granular building permit data for the selected county.
+
+### Data Available
+
+From `silver.silver_building_permits` (quarterly, per county):
+- `total_units_permitted` — total residential units permitted
+- `single_family_units` — single-family units permitted
+- `multi_family_units` — multi-family units permitted
+- `report_year`, `report_quarter` — time dimensions
+
+### User Flow
+
+1. User clicks a county (Map or Analysis tab) → CountyDetail panel opens
+2. Panel gets a new **"Details"** sub-tab (alongside existing summary view)
+3. Details tab shows:
+   - **Quarterly permits trend chart** — bar/line chart of total units permitted over time
+   - **Unit type breakdown** — stacked bar or donut: single-family vs multi-family split
+   - **YoY change** — current quarter vs same quarter prior year (% change)
+   - **Raw data table** — scrollable table of quarterly permit records
+
+### New API Endpoint
+
+- `GET /api/counties/{fips}/permits` — Returns all quarterly building permit records for a county (from `silver_building_permits` via Lakebase synced table)
+
+### Frontend Components
+
+- `CountyDetailsTab.tsx` — Tab container with permit charts and table
+- `PermitTrendChart.tsx` — Time series chart (quarterly bars)
+- `PermitBreakdown.tsx` — Single-family vs multi-family breakdown visual
+
+### Implementation Notes
+
+- Query the Lakebase `synced_silver_building_permits` table (or add a new synced table if not already synced)
+- Chart library: reuse whatever is already in the frontend (likely inline SVG or a lightweight lib)
+- No new data ingestion needed — data already exists in silver
 
 ---
 
