@@ -19,6 +19,15 @@ const INDICATOR_LABELS: Record<string, string> = {
   ssp_projected_growth: "Pop. Projections",
 };
 
+const INDICATOR_TOOLTIPS: Record<string, string> = {
+  building_permits: "New residential units permitted per 1,000 residents. High permit activity signals near-term rooftop growth — new customers arriving in 12-18 months.",
+  net_migration: "Net move-ins minus move-outs per 1,000 residents (USPS data). Positive = people are arriving; negative = people are leaving.",
+  vacancy_change: "Percentage of housing units occupied (1 − vacancy rate). Higher occupancy means stronger housing demand and more potential customers per square mile.",
+  employment_growth: "Total employment divided by population. Higher ratios indicate a stronger local job market, more daytime traffic, and greater spending power.",
+  school_enrollment_growth: "Public school enrollment relative to population. Growing enrollment signals family formation — a leading indicator of long-term residential demand.",
+  ssp_projected_growth: "Blended county growth rate combining state-level SSP2 projections (50%), building permit momentum (25%), and net migration trends (25%).",
+};
+
 const TIER_BADGE_COLORS: Record<string, string> = {
   A: "#228B22", B: "#6BAF6B", C: "#E6A817", D: "#E07020", F: "#C41E3A",
 };
@@ -55,9 +64,11 @@ export function CountyDetail({ fips, onClose }: Props) {
     const raw = componentScores[key];
     const hasData = raw != null && raw !== undefined;
     return {
+      key,
       indicator: label,
       value: hasData ? Math.round(raw * 100) : 0,
       hasData,
+      tooltip: INDICATOR_TOOLTIPS[key] || "",
     };
   });
 
@@ -169,8 +180,11 @@ export function CountyDetail({ fips, onClose }: Props) {
 
       <div className="component-bars">
         {radarData.map((d) => (
-          <div key={d.indicator} className="bar-row">
-            <span className="bar-label">{d.indicator}</span>
+          <div key={d.indicator} className="bar-row" title={d.tooltip}>
+            <span className="bar-label">
+              {d.indicator}
+              <span className="info-icon" title={d.tooltip}>ⓘ</span>
+            </span>
             <div className="bar-track">
               {d.hasData ? (
                 <div
