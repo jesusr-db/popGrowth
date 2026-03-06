@@ -1,0 +1,14 @@
+resources:
+  jobs:
+    ingest_overture_maps:
+      name: "popgrowth-ingest-overture-maps"
+      tasks:
+        - task_key: ingest
+          environment_key: default
+          spark_python_task:
+            python_file: ../../src/jobs/ingest_overture_maps.py
+            source: WORKSPACE
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"

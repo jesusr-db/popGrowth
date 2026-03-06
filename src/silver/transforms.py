@@ -12,6 +12,8 @@ from src.silver.acs_demographics import transform_acs_demographics
 from src.silver.business_patterns import transform_business_patterns
 from src.silver.ssp_projections import transform_ssp_projections
 from src.silver.national_projections import transform_national_projections
+from src.silver.overture_poi import transform_overture_poi
+from src.silver.overture_segments import transform_overture_segments
 
 
 def run_all_silver_transforms(spark: SparkSession, catalog: str = CATALOG):
@@ -45,6 +47,10 @@ def run_all_silver_transforms(spark: SparkSession, catalog: str = CATALOG):
             spark.table(f"{bronze}.ssp_projections"))),
         ("national_projections", lambda: transform_national_projections(
             spark.table(f"{bronze}.national_projections"))),
+        ("poi_restaurants", lambda: transform_overture_poi(
+            spark.table(f"{bronze}.overture_places"))),
+        ("road_segments", lambda: transform_overture_segments(
+            spark.table(f"{bronze}.overture_segments"))),
     ]
 
     import logging
