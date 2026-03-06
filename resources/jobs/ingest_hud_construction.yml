@@ -1,7 +1,7 @@
 resources:
   jobs:
     ingest_hud_construction:
-      name: "store-siting-ingest-hud-construction"
+      name: "popgrowth-ingest-hud-construction"
       schedule:
         quartz_cron_expression: "0 0 6 1 1,4,7,10 ?"
         timezone_id: "America/New_York"

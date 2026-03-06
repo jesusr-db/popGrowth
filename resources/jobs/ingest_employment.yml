@@ -1,7 +1,7 @@
 resources:
   jobs:
     ingest_employment:
-      name: "store-siting-ingest-employment"
+      name: "popgrowth-ingest-employment"
       schedule:
         quartz_cron_expression: "0 0 6 1 1,4,7,10 ?"
         timezone_id: "America/New_York"

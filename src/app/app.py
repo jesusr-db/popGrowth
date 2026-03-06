@@ -4,7 +4,7 @@ import os
 import logging
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-logger = logging.getLogger("store-siting")
+logger = logging.getLogger("popGrowth")
 
 # Ensure the app directory is on sys.path so 'backend' is importable
 _app_dir = os.path.dirname(os.path.abspath(__file__))

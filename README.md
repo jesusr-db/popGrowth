@@ -1,6 +1,6 @@
-# Store Siting App
+# popGrowth
 
-A QSR (Quick Service Restaurant) store siting application that scores all 3,209 US counties by leading indicators of population growth. Built on Databricks with a Medallion architecture (Bronze/Silver/Gold) and deployed as a Databricks App with a React + FastAPI frontend.
+A QSR (Quick Service Restaurant) growth scoring application that scores all 3,209 US counties by leading indicators of population growth. Built on Databricks with a Medallion architecture (Bronze/Silver/Gold) and deployed as a Databricks App with a React + FastAPI frontend.
 
 ![Architecture: Bronze → Silver → Gold → App](https://img.shields.io/badge/Architecture-Medallion-blue)
 ![Counties: 3,209](https://img.shields.io/badge/Counties-3%2C209-green)
@@ -27,7 +27,7 @@ databricks bundle run transform_silver -t dev
 databricks bundle run compute_gold_scores -t dev
 
 # 4. Deploy the app
-databricks apps deploy store-siting --source-code-path <workspace-files-path>/src/app
+databricks apps deploy popGrowth --source-code-path <workspace-files-path>/src/app
 
 # 5. Open the app URL in your browser
 ```

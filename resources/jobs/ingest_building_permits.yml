@@ -1,7 +1,7 @@
 resources:
   jobs:
     ingest_building_permits:
-      name: "store-siting-ingest-building-permits"
+      name: "popgrowth-ingest-building-permits"
       schedule:
         quartz_cron_expression: "0 0 6 1 * ?"
         timezone_id: "America/New_York"

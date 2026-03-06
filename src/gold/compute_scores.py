@@ -149,7 +149,7 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
             "enrollment_per_capita",
             col("total_enrollment") / col("population")
         )
-    # Invert vacancy rate: lower vacancy = better for store siting
+    # Invert vacancy rate: lower vacancy = better for growth scoring
     if "vacancy_rate" in combined.columns:
         combined = combined.withColumn(
             "occupancy_rate",

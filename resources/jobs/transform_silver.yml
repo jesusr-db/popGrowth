@@ -1,7 +1,7 @@
 resources:
   jobs:
     transform_silver:
-      name: "store-siting-transform-silver"
+      name: "popgrowth-transform-silver"
       tasks:
         - task_key: run_silver_transforms
           environment_key: default

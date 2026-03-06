@@ -1,7 +1,7 @@
 resources:
   jobs:
     ingest_acs_demographics:
-      name: "store-siting-ingest-acs-demographics"
+      name: "popgrowth-ingest-acs-demographics"
       schedule:
         quartz_cron_expression: "0 0 6 15 9 ?"
         timezone_id: "America/New_York"

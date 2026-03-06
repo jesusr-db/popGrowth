@@ -1,7 +1,7 @@
 resources:
   jobs:
     ingest_business_patterns:
-      name: "store-siting-ingest-business-patterns"
+      name: "popgrowth-ingest-business-patterns"
       schedule:
         quartz_cron_expression: "0 0 6 15 6 ?"
         timezone_id: "America/New_York"

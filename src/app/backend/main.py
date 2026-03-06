@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
-app = FastAPI(title="Store Siting API", version="1.0.0")
+app = FastAPI(title="popGrowth API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,

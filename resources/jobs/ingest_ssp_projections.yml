@@ -1,7 +1,7 @@
 resources:
   jobs:
     ingest_ssp_projections:
-      name: "store-siting-ingest-ssp-projections"
+      name: "popgrowth-ingest-ssp-projections"
       schedule:
         quartz_cron_expression: "0 0 6 1 1 ?"
         timezone_id: "America/New_York"

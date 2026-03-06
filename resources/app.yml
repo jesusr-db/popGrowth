@@ -1,8 +1,8 @@
 resources:
   apps:
-    store_siting_app:
-      name: "store-siting"
-      description: "QSR Store Siting — Growth Score Explorer"
+    popgrowth_app:
+      name: "popGrowth"
+      description: "popGrowth — Growth Score Explorer"
       source_code_path: ../src/app
       resources:
         - name: "lakebase"

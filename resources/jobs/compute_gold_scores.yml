@@ -1,7 +1,7 @@
 resources:
   jobs:
     compute_gold_scores:
-      name: "store-siting-compute-gold-scores"
+      name: "popgrowth-compute-gold-scores"
       tasks:
         - task_key: run_gold_scoring
           environment_key: default

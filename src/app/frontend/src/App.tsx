@@ -22,7 +22,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Store Siting — Growth Score Explorer</h1>
+        <h1>popGrowth — Growth Score Explorer</h1>
         <nav className="tab-nav">
           <button
             className={`tab-btn ${activeTab === "map" ? "active" : ""}`}
