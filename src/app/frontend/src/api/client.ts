@@ -32,6 +32,9 @@ export interface CountyDetail extends CountySummary {
   ssp_projected_pop?: number;
   ssp_projection_year?: number;
   ssp_growth_rate?: number;
+  total_units_permitted?: number;
+  single_family_units?: number;
+  multi_family_units?: number;
 }
 
 export interface ScoringWeight {
