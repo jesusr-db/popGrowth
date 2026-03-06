@@ -1,61 +1,97 @@
-"""Databricks SQL Connector for the FastAPI app."""
+"""Lakebase PostgreSQL connection for the FastAPI app."""
 
 import os
 import logging
-from databricks import sql as databricks_sql
+import time
 from contextlib import contextmanager
+
+import psycopg2
+import psycopg2.extras
 
 logger = logging.getLogger(__name__)
 
+_cached_credential: dict | None = None
+_credential_expiry: float = 0
 
-def get_connection_params():
-    host = os.environ.get("DATABRICKS_HOST", "")
-    # Strip protocol prefix if present — connector expects just the hostname
-    host = host.replace("https://", "").replace("http://", "").rstrip("/")
-    http_path = os.environ.get("DATABRICKS_HTTP_PATH", "")
 
-    logger.debug("Connecting to %s with http_path=%s", host, http_path)
+def _get_lakebase_credential() -> dict:
+    """Get Lakebase database credential via Databricks SDK.
 
-    params = {
-        "server_hostname": host,
-        "http_path": http_path,
-    }
+    Uses generate_database_credential() for a short-lived OAuth token.
+    Falls back to the SP's workspace token if the database API is unavailable.
+    Credentials are cached for 50 minutes (tokens expire at 60 min).
+    """
+    global _cached_credential, _credential_expiry
 
-    # Databricks Apps inject DATABRICKS_TOKEN or use default credentials
-    token = os.environ.get("DATABRICKS_TOKEN", "")
-    if token:
-        params["access_token"] = token
-    else:
-        # Use Databricks SDK to get an OAuth token for the service principal
+    if _cached_credential and time.time() < _credential_expiry:
+        return _cached_credential
+
+    instance_name = os.environ.get("LAKEBASE_INSTANCE", "store-siting-app")
+
+    try:
+        from databricks.sdk import WorkspaceClient
+        w = WorkspaceClient()
+
+        cred = w.database.generate_database_credential(instance_names=[instance_name])
+        user = os.environ.get("PGUSER") or w.current_user.me().user_name
+
+        _cached_credential = {
+            "user": user,
+            "password": cred.token,
+        }
+        _credential_expiry = time.time() + 3000
+        logger.debug("Generated Lakebase credential for user=%s", user)
+        return _cached_credential
+
+    except Exception as e:
+        logger.warning("SDK credential generation failed: %s, falling back to workspace token", e)
         try:
             from databricks.sdk import WorkspaceClient
-            w = WorkspaceClient()
-            token = w.config.authenticate()
-            if isinstance(token, dict):
-                params["access_token"] = token.get("Authorization", "").replace("Bearer ", "")
-            else:
-                params["access_token"] = str(token).replace("Bearer ", "")
-            logger.debug("Got OAuth token via SDK")
-        except Exception as e:
-            logger.warning("Could not get SDK token: %s", e)
-
-    return params
+            w2 = WorkspaceClient()
+            token = w2.config.token
+            user = os.environ.get("PGUSER") or w2.current_user.me().user_name
+            if token:
+                logger.debug("Using workspace OAuth token for user=%s", user)
+                return {"user": user, "password": token}
+        except Exception as e2:
+            logger.warning("Workspace token fallback also failed: %s", e2)
+        token = os.environ.get("DATABRICKS_TOKEN", "")
+        user = os.environ.get("PGUSER", "token")
+        return {"user": user, "password": token}
 
 
 @contextmanager
 def get_cursor():
-    params = get_connection_params()
-    conn = databricks_sql.connect(**params)
+    host = os.environ.get("PGHOST") or os.environ.get("LAKEBASE_HOST", "")
+    port = int(os.environ.get("PGPORT", "5432"))
+    database = os.environ.get("PGDATABASE") or os.environ.get("LAKEBASE_DATABASE", "store_siting_app")
+    cred = _get_lakebase_credential()
+
+    logger.debug("Connecting to Lakebase at %s db=%s user=%s", host, database, cred["user"])
+
+    conn = psycopg2.connect(
+        host=host,
+        port=port,
+        dbname=database,
+        user=cred["user"],
+        password=cred["password"],
+        sslmode="require",
+    )
     try:
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         yield cursor
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cursor.close()
         conn.close()
 
 
-def execute_query(query: str, params: dict | None = None) -> list[dict]:
+def execute_query(query: str, params: tuple | None = None) -> list[dict]:
     with get_cursor() as cursor:
         cursor.execute(query, params)
-        columns = [desc[0] for desc in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        if cursor.description is None:
+            return []
+        return [dict(row) for row in cursor.fetchall()]

@@ -4,14 +4,18 @@ resources:
       name: "store-siting"
       description: "QSR Store Siting — Growth Score Explorer"
       source_code_path: ../src/app
+      resources:
+        - name: "lakebase"
+          database:
+            instance_name: "store-siting-app"
+            database_name: "store_siting_app"
+            permission: "CAN_CONNECT_AND_CREATE"
       config:
         command:
           - python
           - app.py
         env:
-          - name: DATABRICKS_HOST
-            value: "https://fe-vm-vdm-classic-rikfy0.cloud.databricks.com"
-          - name: DATABRICKS_HTTP_PATH
-            value: /sql/1.0/warehouses/${var.warehouse_id}
+          - name: LAKEBASE_INSTANCE
+            value: "store-siting-app"
           - name: CATALOG
             value: ${var.catalog}

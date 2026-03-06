@@ -28,8 +28,9 @@ def test_top_counties_default_25(mock_query):
     mock_query.return_value = []
     response = client.get("/api/counties/top")
     assert response.status_code == 200
-    call_args = mock_query.call_args[0][0]
-    assert "LIMIT 25" in call_args
+    call_args = mock_query.call_args
+    assert "LIMIT %s" in call_args[0][0]
+    assert 25 in call_args[0][1]
 
 
 @patch("backend.routes.counties.execute_query")

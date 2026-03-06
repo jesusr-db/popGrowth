@@ -2,7 +2,9 @@ command:
   - python
   - app.py
 env:
-  - name: DATABRICKS_HTTP_PATH
-    value: /sql/1.0/warehouses/5067b513037fbf07
-  - name: CATALOG
-    value: vdm_classic_rikfy0_catalog
+  - name: PGHOST
+    valueFrom: lakebase
+  - name: PGDATABASE
+    value: store_siting_app
+  - name: LAKEBASE_INSTANCE
+    value: store-siting-app

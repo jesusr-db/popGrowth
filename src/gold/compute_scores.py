@@ -97,17 +97,12 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
     ssp = None
     if ssp_raw is not None:
         from pyspark.sql.functions import substring, max as spark_max
-        # SSP data is state-level (state_fips in fips column or 2-digit codes)
-        # Get the latest projection year per state for SSP2 scenario
+        # SSP data is state-level — we join by state prefix and use the
+        # growth rate as a macro baseline.  The raw projected_population is
+        # the *state* total and must NOT be shown as a county number.
         ssp_filtered = ssp_raw.filter(col("scenario") == "SSP2")
-        # Determine if fips is 2-digit state or 5-digit county
         ssp_cols = ssp_filtered.columns
-        if "state_fips" in ssp_cols:
-            ssp_state_col = col("state_fips")
-        else:
-            # fips might be 2-digit state codes
-            ssp_state_col = col("fips")
-        # Get max projection year per state for the growth rate
+        ssp_state_col = col("state_fips") if "state_fips" in ssp_cols else col("fips")
         ssp_latest = ssp_filtered.withColumn("_state", ssp_state_col)
         w_ssp = Window.partitionBy("_state").orderBy(col("projection_year").desc())
         ssp_latest = (
@@ -116,9 +111,8 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
             .drop("_rn")
             .select(
                 col("_state").alias("_ssp_state"),
-                col("projected_population").alias("ssp_projected_pop"),
                 col("projection_year").alias("ssp_projection_year"),
-                coalesce(col("projected_growth_rate"), lit(0.0)).alias("ssp_growth_rate"),
+                coalesce(col("projected_growth_rate"), lit(0.0)).alias("_state_ssp_growth_rate"),
             )
         )
         ssp = ssp_latest
@@ -161,6 +155,49 @@ def build_indicator_table(spark: SparkSession, catalog: str = CATALOG) -> DataFr
             "occupancy_rate",
             lit(1.0) - coalesce(col("vacancy_rate"), lit(0.0))
         )
+
+    # --- Compute blended county-level growth rate & projected population ---
+    # The state SSP rate is a macro baseline.  We blend it with county-level
+    # signals (permits momentum, migration, employment) to estimate a
+    # county-specific growth rate, then project population forward.
+    from pyspark.sql.functions import pow as spark_pow, abs as spark_abs, least, greatest
+
+    state_rate = coalesce(col("_state_ssp_growth_rate"), lit(0.0))
+    # Normalize county signals into growth-rate-like values:
+    #   permits_per_1k_pop: national median ~3-4, high = fast growth
+    #   net_migration_rate: per-1000 residents, positive = growth
+    #   employment_per_capita: ~0.4-0.5 typical, higher = more jobs
+    permits_signal = coalesce(col("permits_per_1k_pop"), lit(0.0)) / lit(100.0)
+    migration_signal = coalesce(col("net_migration_rate"), lit(0.0)) / lit(1000.0)
+
+    # Blend: 50% state SSP baseline + 25% permits signal + 25% migration
+    blended_rate = (
+        lit(0.50) * state_rate
+        + lit(0.25) * permits_signal
+        + lit(0.25) * migration_signal
+    )
+    # Clamp to reasonable range: -30% to +50% over the projection horizon
+    blended_rate = greatest(least(blended_rate, lit(0.50)), lit(-0.30))
+
+    combined = combined.withColumn("ssp_growth_rate", blended_rate)
+
+    # Annualize: projection_year - current ACS year (default 10 years)
+    projection_years = coalesce(
+        col("ssp_projection_year") - col("acs_year"),
+        lit(10)
+    ).cast(DoubleType())
+    annual_rate = when(
+        projection_years > 0,
+        spark_pow(lit(1.0) + col("ssp_growth_rate"), lit(1.0) / projection_years) - lit(1.0)
+    ).otherwise(lit(0.0))
+
+    combined = combined.withColumn(
+        "ssp_projected_pop",
+        (col("population") * spark_pow(lit(1.0) + annual_rate, projection_years)).cast("long")
+    )
+
+    # Drop internal column
+    combined = combined.drop("_state_ssp_growth_rate")
 
     return combined
 

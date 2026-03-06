@@ -12,6 +12,12 @@ variables:
   warehouse_id:
     default: "5067b513037fbf07"
     description: "SQL Warehouse ID for app queries"
+  lakebase_host:
+    default: "instance-59db99f9-a205-4462-a1ed-60148c679c9d.database.cloud.databricks.com"
+    description: "Lakebase PostgreSQL endpoint host"
+  lakebase_database:
+    default: "store_siting_app"
+    description: "Lakebase PostgreSQL database name"
 
 include:
   - resources/*.yml
@@ -23,7 +29,9 @@ targets:
     default: true
     variables:
       catalog: store_siting_dev
+      lakebase_database: store_siting_app_dev
 
   prod:
     variables:
       catalog: store_siting
+      lakebase_database: store_siting_app
